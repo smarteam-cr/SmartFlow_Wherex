@@ -1,0 +1,173 @@
+<svg viewBox="0 0 1400 1080" xmlns="http://www.w3.org/2000/svg" font-family="Inter, 'Segoe UI', system-ui, sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f7f9fd"/>
+      <stop offset="1" stop-color="#eef1f8"/>
+    </linearGradient>
+    <linearGradient id="hdr" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#6366f1"/>
+      <stop offset="0.5" stop-color="#8b5cf6"/>
+      <stop offset="1" stop-color="#ec4899"/>
+    </linearGradient>
+    <linearGradient id="ba1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#60a5fa"/><stop offset="1" stop-color="#2563eb"/></linearGradient>
+    <linearGradient id="ba2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#a78bfa"/><stop offset="1" stop-color="#7c3aed"/></linearGradient>
+    <linearGradient id="ba3" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2dd4bf"/><stop offset="1" stop-color="#0d9488"/></linearGradient>
+    <linearGradient id="ba4" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fb923c"/><stop offset="1" stop-color="#ea580c"/></linearGradient>
+    <linearGradient id="bb1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4ade80"/><stop offset="1" stop-color="#16a34a"/></linearGradient>
+    <linearGradient id="bb2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fbbf24"/><stop offset="1" stop-color="#d97706"/></linearGradient>
+    <linearGradient id="bb3" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f472b6"/><stop offset="1" stop-color="#db2777"/></linearGradient>
+    <linearGradient id="bb4" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#22d3ee"/><stop offset="1" stop-color="#0891b2"/></linearGradient>
+    <filter id="sh" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="6" stdDeviation="9" flood-color="#1e293b" flood-opacity="0.12"/>
+    </filter>
+    <marker id="arw" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#94a3b8"/>
+    </marker>
+  </defs>
+
+  <rect width="1400" height="1080" fill="url(#bg)"/>
+
+  <!-- Header -->
+  <rect x="50" y="34" width="1300" height="10" rx="5" fill="url(#hdr)"/>
+  <text x="700" y="92" text-anchor="middle" font-size="40" font-weight="800" fill="#1e293b">Integración Slack &#8646; HubSpot</text>
+  <text x="700" y="126" text-anchor="middle" font-size="19" fill="#64748b">Arquitectura monolítica &#183; tarea programada de ingesta + API de callback</text>
+  <g transform="translate(700,152)">
+    <rect x="-215" y="0" width="430" height="30" rx="15" fill="#eef2ff" stroke="#c7d2fe"/>
+    <text x="0" y="20" text-anchor="middle" font-size="14" font-weight="600" fill="#4f46e5" font-family="ui-monospace, Menlo, monospace">Node.js &#183; Express &#183; node-cron &#183; MongoDB</text>
+  </g>
+
+  <!-- ===================== LANE A ===================== -->
+  <rect x="50" y="200" width="1300" height="250" rx="26" fill="#eef4ff" stroke="#d7e4ff"/>
+  <rect x="70" y="216" width="470" height="30" rx="15" fill="#2563eb"/>
+  <text x="86" y="236" font-size="14.5" font-weight="700" fill="#ffffff">FLUJO A &#183; INGESTA PROGRAMADA — Slack &#8594; HubSpot</text>
+
+  <!-- Card A1 -->
+  <g filter="url(#sh)"><rect x="78" y="262" width="248" height="170" rx="20" fill="#ffffff" stroke="#bfdbfe"/></g>
+  <circle cx="116" cy="300" r="27" fill="url(#ba1)"/><text x="116" y="311" text-anchor="middle" font-size="28" font-weight="800" fill="#fff">1</text>
+  <text x="158" y="298" font-size="17" font-weight="700" fill="#1e293b">Scheduler</text>
+  <g transform="translate(280,286)" stroke="#2563eb" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></g>
+  <text x="100" y="346" font-size="13.5" fill="#475569" font-family="ui-monospace, Menlo, monospace">node-cron / setInterval</text>
+  <text x="100" y="368" font-size="13.5" fill="#475569">Se ejecuta cada X min</text>
+  <text x="100" y="390" font-size="13.5" fill="#475569">(intervalo configurable)</text>
+
+  <!-- Card A2 -->
+  <g filter="url(#sh)"><rect x="402" y="262" width="248" height="170" rx="20" fill="#ffffff" stroke="#ddd6fe"/></g>
+  <circle cx="440" cy="300" r="27" fill="url(#ba2)"/><text x="440" y="311" text-anchor="middle" font-size="28" font-weight="800" fill="#fff">2</text>
+  <text x="482" y="298" font-size="17" font-weight="700" fill="#1e293b">Leer Slack</text>
+  <g transform="translate(604,286)" stroke="#7c3aed" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v10"/><path d="M8 11l4 4 4-4"/><path d="M6 19h12"/></g>
+  <text x="424" y="346" font-size="13" fill="#475569" font-family="ui-monospace, Menlo, monospace">conversations.history</text>
+  <text x="424" y="368" font-size="13.5" fill="#475569">Ventana: oldest=watermark</text>
+  <text x="424" y="390" font-size="13.5" fill="#475569">latest=ahora &#183; inclusive</text>
+
+  <!-- Card A3 -->
+  <g filter="url(#sh)"><rect x="726" y="262" width="248" height="170" rx="20" fill="#ffffff" stroke="#99f6e4"/></g>
+  <circle cx="764" cy="300" r="27" fill="url(#ba3)"/><text x="764" y="311" text-anchor="middle" font-size="28" font-weight="800" fill="#fff">3</text>
+  <text x="806" y="298" font-size="17" font-weight="700" fill="#1e293b">Deduplicar</text>
+  <g transform="translate(928,288)" stroke="#0d9488" stroke-width="2" fill="none"><circle cx="9" cy="12" r="6"/><circle cx="15" cy="12" r="6"/></g>
+  <text x="748" y="346" font-size="13" fill="#475569" font-family="ui-monospace, Menlo, monospace">buscar slack_message_ts</text>
+  <text x="748" y="368" font-size="13.5" fill="#475569">en HubSpot (o Mongo)</text>
+  <text x="748" y="390" font-size="13.5" fill="#475569">descarta repetidos</text>
+
+  <!-- Card A4 -->
+  <g filter="url(#sh)"><rect x="1050" y="262" width="248" height="170" rx="20" fill="#ffffff" stroke="#fed7aa"/></g>
+  <circle cx="1088" cy="300" r="27" fill="url(#ba4)"/><text x="1088" y="311" text-anchor="middle" font-size="28" font-weight="800" fill="#fff">4</text>
+  <text x="1130" y="298" font-size="17" font-weight="700" fill="#1e293b">Crear ticket</text>
+  <g transform="translate(1252,286)" stroke="#ea580c" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h16v3a2 2 0 0 0 0 4v3H4v-3a2 2 0 0 0 0-4z"/><path d="M12 8v11" stroke-dasharray="2 2"/></g>
+  <text x="1072" y="346" font-size="12.5" fill="#475569" font-family="ui-monospace, Menlo, monospace">POST /crm/v3/objects/</text>
+  <text x="1072" y="368" font-size="12.5" fill="#475569" font-family="ui-monospace, Menlo, monospace">tickets + metadata Slack</text>
+  <text x="1072" y="390" font-size="13.5" fill="#475569">guarda ts, canal, thread</text>
+
+  <!-- arrows A -->
+  <line x1="326" y1="347" x2="400" y2="347" stroke="#94a3b8" stroke-width="3" marker-end="url(#arw)"/>
+  <line x1="650" y1="347" x2="724" y2="347" stroke="#94a3b8" stroke-width="3" marker-end="url(#arw)"/>
+  <line x1="974" y1="347" x2="1048" y2="347" stroke="#94a3b8" stroke-width="3" marker-end="url(#arw)"/>
+
+  <!-- bridge caption -->
+  <g transform="translate(700,470)">
+    <rect x="-360" y="-18" width="720" height="34" rx="17" fill="#fff7ed" stroke="#fdba74"/>
+    <text x="0" y="5" text-anchor="middle" font-size="14" font-weight="600" fill="#9a3412">El agente atiende el ticket y lo marca como &#8220;Completado&#8221; &#8594; se dispara el Flujo B</text>
+  </g>
+
+  <!-- ===================== LANE B ===================== -->
+  <rect x="50" y="490" width="1300" height="250" rx="26" fill="#eefaf1" stroke="#c9efd6"/>
+  <rect x="70" y="506" width="490" height="30" rx="15" fill="#16a34a"/>
+  <text x="86" y="526" font-size="14.5" font-weight="700" fill="#ffffff">FLUJO B &#183; CALLBACK DE FINALIZACIÓN — HubSpot &#8594; Slack</text>
+
+  <!-- Card B1 -->
+  <g filter="url(#sh)"><rect x="78" y="552" width="248" height="170" rx="20" fill="#ffffff" stroke="#bbf7d0"/></g>
+  <circle cx="116" cy="590" r="27" fill="url(#bb1)"/><text x="116" y="601" text-anchor="middle" font-size="28" font-weight="800" fill="#fff">1</text>
+  <text x="158" y="588" font-size="17" font-weight="700" fill="#1e293b">Ticket completado</text>
+  <g transform="translate(280,576)" stroke="#16a34a" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></g>
+  <text x="100" y="636" font-size="13.5" fill="#475569">El agente cierra el ticket</text>
+  <text x="100" y="658" font-size="13" fill="#475569" font-family="ui-monospace, Menlo, monospace">hs_pipeline_stage =</text>
+  <text x="100" y="680" font-size="13.5" fill="#475569">&#8220;Completado&#8221;</text>
+
+  <!-- Card B2 -->
+  <g filter="url(#sh)"><rect x="402" y="552" width="248" height="170" rx="20" fill="#ffffff" stroke="#fde68a"/></g>
+  <circle cx="440" cy="590" r="27" fill="url(#bb2)"/><text x="440" y="601" text-anchor="middle" font-size="28" font-weight="800" fill="#fff">2</text>
+  <text x="482" y="588" font-size="17" font-weight="700" fill="#1e293b">Workflow webhook</text>
+  <g transform="translate(604,576)" stroke="#d97706" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16v-4a6 6 0 1 1 12 0v4l2 2H4z"/><path d="M10 20a2 2 0 0 0 4 0"/></g>
+  <text x="424" y="636" font-size="13.5" fill="#475569">Workflow de HubSpot</text>
+  <text x="424" y="658" font-size="13.5" fill="#475569">dispara un POST</text>
+  <text x="424" y="680" font-size="13.5" fill="#475569">hacia la API del monolito</text>
+
+  <!-- Card B3 -->
+  <g filter="url(#sh)"><rect x="726" y="552" width="248" height="170" rx="20" fill="#ffffff" stroke="#fbcfe8"/></g>
+  <circle cx="764" cy="590" r="27" fill="url(#bb3)"/><text x="764" y="601" text-anchor="middle" font-size="28" font-weight="800" fill="#fff">3</text>
+  <text x="806" y="588" font-size="17" font-weight="700" fill="#1e293b">API webhook</text>
+  <g transform="translate(928,576)" stroke="#db2777" stroke-width="2" fill="none"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><ellipse cx="12" cy="12" rx="4" ry="9"/></g>
+  <text x="748" y="636" font-size="12.5" fill="#475569" font-family="ui-monospace, Menlo, monospace">POST /webhooks/hubspot</text>
+  <text x="748" y="658" font-size="13.5" fill="#475569">valida firma + lee</text>
+  <text x="748" y="680" font-size="13.5" fill="#475569">props Slack del ticket</text>
+
+  <!-- Card B4 -->
+  <g filter="url(#sh)"><rect x="1050" y="552" width="248" height="170" rx="20" fill="#ffffff" stroke="#a5f3fc"/></g>
+  <circle cx="1088" cy="590" r="27" fill="url(#bb4)"/><text x="1088" y="601" text-anchor="middle" font-size="28" font-weight="800" fill="#fff">4</text>
+  <text x="1130" y="588" font-size="17" font-weight="700" fill="#1e293b">Responder Slack</text>
+  <g transform="translate(1252,578)" stroke="#0891b2" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16v9H9l-4 4v-4H4z"/></g>
+  <text x="1072" y="636" font-size="13" fill="#475569" font-family="ui-monospace, Menlo, monospace">chat.postMessage</text>
+  <text x="1072" y="658" font-size="13.5" fill="#475569">texto: &#8220;Listo&#8221;</text>
+  <text x="1072" y="680" font-size="13.5" fill="#475569">thread_ts = mensaje origen</text>
+
+  <!-- arrows B -->
+  <line x1="326" y1="637" x2="400" y2="637" stroke="#94a3b8" stroke-width="3" marker-end="url(#arw)"/>
+  <line x1="650" y1="637" x2="724" y2="637" stroke="#94a3b8" stroke-width="3" marker-end="url(#arw)"/>
+  <line x1="974" y1="637" x2="1048" y2="637" stroke="#94a3b8" stroke-width="3" marker-end="url(#arw)"/>
+
+  <!-- ===================== FOOTER ===================== -->
+  <text x="78" y="792" font-size="17" font-weight="800" fill="#334155">Componentes, propiedades y configuración</text>
+
+  <!-- Footer 1 -->
+  <g filter="url(#sh)"><rect x="78" y="812" width="392" height="222" rx="20" fill="#ffffff" stroke="#e2e8f0"/></g>
+  <rect x="78" y="812" width="392" height="8" rx="4" fill="url(#ba2)"/>
+  <text x="100" y="852" font-size="16" font-weight="700" fill="#1e293b">Monolito &#183; módulos</text>
+  <text x="100" y="882" font-size="13.5" fill="#475569">&#8226; API web: Node.js + Express (webhook + health)</text>
+  <text x="100" y="908" font-size="13.5" fill="#475569">&#8226; Scheduler: node-cron (job de ingesta)</text>
+  <text x="100" y="934" font-size="13.5" fill="#475569">&#8226; Slack Service: @slack/web-api</text>
+  <text x="100" y="960" font-size="13.5" fill="#475569">&#8226; HubSpot Service: cliente REST CRM v3</text>
+  <text x="100" y="986" font-size="13.5" fill="#475569">&#8226; Persistencia: MongoDB (watermark + dedup)</text>
+  <text x="100" y="1012" font-size="13.5" fill="#475569">&#8226; Config centralizada por variables de entorno</text>
+
+  <!-- Footer 2 -->
+  <g filter="url(#sh)"><rect x="502" y="812" width="392" height="222" rx="20" fill="#ffffff" stroke="#e2e8f0"/></g>
+  <rect x="502" y="812" width="392" height="8" rx="4" fill="url(#ba4)"/>
+  <text x="524" y="852" font-size="16" font-weight="700" fill="#1e293b">Propiedades del ticket (HubSpot)</text>
+  <text x="524" y="882" font-size="12.5" fill="#0f766e" font-family="ui-monospace, Menlo, monospace">slack_message_ts</text>
+  <text x="524" y="902" font-size="12" fill="#64748b">ID único del mensaje &#8212; clave de deduplicación</text>
+  <text x="524" y="928" font-size="12.5" fill="#0f766e" font-family="ui-monospace, Menlo, monospace">slack_channel_id</text>
+  <text x="524" y="948" font-size="12" fill="#64748b">canal de origen del mensaje</text>
+  <text x="524" y="974" font-size="12.5" fill="#0f766e" font-family="ui-monospace, Menlo, monospace">slack_thread_ts</text>
+  <text x="524" y="994" font-size="12" fill="#64748b">hilo donde se responde &#8220;Listo&#8221;</text>
+  <text x="524" y="1020" font-size="12" fill="#94a3b8">+ slack_permalink, slack_user (opcionales)</text>
+
+  <!-- Footer 3 -->
+  <g filter="url(#sh)"><rect x="926" y="812" width="372" height="222" rx="20" fill="#ffffff" stroke="#e2e8f0"/></g>
+  <rect x="926" y="812" width="372" height="8" rx="4" fill="url(#bb3)"/>
+  <text x="948" y="852" font-size="16" font-weight="700" fill="#1e293b">Configuración (env)</text>
+  <text x="948" y="882" font-size="12.5" fill="#475569" font-family="ui-monospace, Menlo, monospace">SLACK_BOT_TOKEN</text>
+  <text x="948" y="906" font-size="12.5" fill="#475569" font-family="ui-monospace, Menlo, monospace">SLACK_CHANNEL_ID</text>
+  <text x="948" y="930" font-size="12.5" fill="#475569" font-family="ui-monospace, Menlo, monospace">HUBSPOT_TOKEN</text>
+  <text x="948" y="954" font-size="12.5" fill="#475569" font-family="ui-monospace, Menlo, monospace">POLL_INTERVAL_MIN = 5</text>
+  <text x="948" y="978" font-size="12.5" fill="#475569" font-family="ui-monospace, Menlo, monospace">HS_STAGE_COMPLETED_ID</text>
+  <text x="948" y="1002" font-size="12.5" fill="#475569" font-family="ui-monospace, Menlo, monospace">WEBHOOK_SECRET</text>
+</svg>
