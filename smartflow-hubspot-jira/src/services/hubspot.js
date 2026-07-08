@@ -1,7 +1,21 @@
 const extractDescription = require('../utils/adf');
+const { withRetry: defaultWithRetry } = require('../utils/retry');
 
-function createHubSpotService({ token, jiraBaseUrl = '' } = {}) {
+function parseRetryAfterMs(res) {
+  if (!res || !res.headers) return null;
+  const get = (h) => (typeof res.headers.get === 'function' ? res.headers.get(h) : res.headers[h.toLowerCase()]);
+  const value = get('retry-after');
+  if (value == null) return null;
+  const seconds = Number.parseInt(value, 10);
+  if (Number.isFinite(seconds) && seconds >= 0) return seconds * 1000;
+  const date = Date.parse(value);
+  if (Number.isFinite(date)) return Math.max(0, date - Date.now());
+  return null;
+}
+
+function createHubSpotService({ token, jiraBaseUrl = '', withRetry } = {}) {
   if (!token) throw new Error('HubSpotService: token is required');
+  const withRetryFn = withRetry || defaultWithRetry;
 
   const authHeaders = {
     Authorization: `Bearer ${token}`,
@@ -9,6 +23,23 @@ function createHubSpotService({ token, jiraBaseUrl = '' } = {}) {
   };
 
   const cleanJiraBaseUrl = String(jiraBaseUrl || '').replace(/\/$/, '');
+
+  async function rawFetch(url, init) {
+    const res = await fetch(url, init);
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      const err = new Error(`HubSpot ${res.status}: ${text}`);
+      err.status = res.status;
+      err.retryAfterMs = parseRetryAfterMs(res);
+      err.source = 'hubspot';
+      throw err;
+    }
+    return res;
+  }
+
+  async function request(url, init) {
+    return withRetryFn(() => rawFetch(url, init), { retries: 3, baseMs: 200 });
+  }
 
   async function http(method, path, { body, query } = {}) {
     let url = `https://api.hubapi.com${path}`;
@@ -18,11 +49,7 @@ function createHubSpotService({ token, jiraBaseUrl = '' } = {}) {
     }
     const init = { method, headers: authHeaders };
     if (body !== undefined) init.body = JSON.stringify(body);
-    const res = await fetch(url, init);
-    if (!res.ok) {
-      const text = await res.text().catch(() => '');
-      throw new Error(`HubSpot ${res.status}: ${text}`);
-    }
+    const res = await request(url, init);
     return res.json();
   }
 

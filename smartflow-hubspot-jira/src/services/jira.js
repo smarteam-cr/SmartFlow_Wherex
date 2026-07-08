@@ -1,7 +1,22 @@
-function createJiraService({ baseUrl, email, apiToken } = {}) {
+const { withRetry: defaultWithRetry } = require('../utils/retry');
+
+function parseRetryAfterMs(res) {
+  if (!res || !res.headers) return null;
+  const get = (h) => (typeof res.headers.get === 'function' ? res.headers.get(h) : res.headers[h.toLowerCase()]);
+  const value = get('retry-after');
+  if (value == null) return null;
+  const seconds = Number.parseInt(value, 10);
+  if (Number.isFinite(seconds) && seconds >= 0) return seconds * 1000;
+  const date = Date.parse(value);
+  if (Number.isFinite(date)) return Math.max(0, date - Date.now());
+  return null;
+}
+
+function createJiraService({ baseUrl, email, apiToken, withRetry } = {}) {
   if (!baseUrl) throw new Error('JiraService: baseUrl is required');
   if (!email) throw new Error('JiraService: email is required');
   if (!apiToken) throw new Error('JiraService: apiToken is required');
+  const withRetryFn = withRetry || defaultWithRetry;
 
   const cleanBaseUrl = String(baseUrl).replace(/\/$/, '');
   const auth = Buffer.from(`${email}:${apiToken}`).toString('base64');
@@ -12,12 +27,29 @@ function createJiraService({ baseUrl, email, apiToken } = {}) {
     Accept: 'application/json',
   };
 
-  async function httpJson(url, init = {}) {
-    const res = await fetch(url, { ...init, headers: { ...defaultHeaders, ...(init.headers || {}) } });
+  async function rawFetch(url, init) {
+    const res = await fetch(url, init);
     if (!res.ok) {
       const body = await res.text().catch(() => '');
-      throw new Error(`JIRA ${res.status}: ${body}`);
+      const err = new Error(`JIRA ${res.status}: ${body}`);
+      err.status = res.status;
+      err.retryAfterMs = parseRetryAfterMs(res);
+      err.source = 'jira';
+      throw err;
     }
+    return res;
+  }
+
+  async function request(url, init) {
+    const finalInit = {
+      ...init,
+      headers: { ...defaultHeaders, ...(init?.headers || {}) },
+    };
+    return withRetryFn(() => rawFetch(url, finalInit), { retries: 3, baseMs: 200 });
+  }
+
+  async function requestJson(url, init = {}) {
+    const res = await request(url, init);
     return res.json();
   }
 
@@ -25,7 +57,7 @@ function createJiraService({ baseUrl, email, apiToken } = {}) {
     const issues = [];
     let nextPageToken;
     do {
-      const data = await httpJson(`${cleanBaseUrl}/rest/api/3/search/jql`, {
+      const data = await requestJson(`${cleanBaseUrl}/rest/api/3/search/jql`, {
         method: 'POST',
         body: JSON.stringify({ jql, fields, maxResults, nextPageToken }),
       });
@@ -46,39 +78,21 @@ function createJiraService({ baseUrl, email, apiToken } = {}) {
         ],
       },
     };
-    let res;
-    try {
-      res = await fetch(url, {
-        method: 'POST',
-        headers: defaultHeaders,
-        body: JSON.stringify(body),
-      });
-    } catch (err) {
-      throw new Error(`JIRA comment network error: ${err.message}`);
-    }
-    if (!res.ok) {
-      const text = await res.text().catch(() => '');
-      throw new Error(`JIRA comment ${res.status}: ${text}`);
-    }
+    const res = await request(url, {
+      method: 'POST',
+      headers: defaultHeaders,
+      body: JSON.stringify(body),
+    });
     return res.json();
   }
 
   async function transitionIssue(issueKey, transitionId) {
     const url = `${cleanBaseUrl}/rest/api/3/issue/${encodeURIComponent(issueKey)}/transitions`;
-    let res;
-    try {
-      res = await fetch(url, {
-        method: 'POST',
-        headers: defaultHeaders,
-        body: JSON.stringify({ transition: { id: String(transitionId) } }),
-      });
-    } catch (err) {
-      throw new Error(`JIRA transition network error: ${err.message}`);
-    }
-    if (!res.ok) {
-      const text = await res.text().catch(() => '');
-      throw new Error(`JIRA transition ${res.status}: ${text}`);
-    }
+    const res = await request(url, {
+      method: 'POST',
+      headers: defaultHeaders,
+      body: JSON.stringify({ transition: { id: String(transitionId) } }),
+    });
     return res.json();
   }
 

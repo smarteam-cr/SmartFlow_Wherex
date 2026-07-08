@@ -12,11 +12,14 @@ beforeEach(() => {
   jira = require('../src/services/jira');
 });
 
+const noRetry = (fn) => fn();
+
 function newJira(overrides = {}) {
   return jira({
     baseUrl: overrides.baseUrl ?? 'https://org.atlassian.net',
     email: overrides.email ?? 'svc@example.com',
     apiToken: overrides.apiToken ?? 'token-abc',
+    withRetry: overrides.withRetry ?? noRetry,
   });
 }
 
@@ -114,7 +117,7 @@ describe('JiraService', () => {
     it('throws on non-ok response', async () => {
       fetchMock.mockResolvedValueOnce(errJson(500, 'oops'));
       const s = newJira();
-      await expect(s.addComment('PROJ-1', 'x')).rejects.toThrow(/JIRA comment 500/);
+      await expect(s.addComment('PROJ-1', 'x')).rejects.toThrow(/JIRA 500/);
     });
   });
 
@@ -161,6 +164,25 @@ describe('JiraService', () => {
       const s = newJira();
       const commentId = await s.respondToIssue('PROJ-1', { transitionDoneId: '' });
       expect(commentId).toBe('comment-99');
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('retry integration', () => {
+    it('retries on 503 then succeeds (uses default withRetry)', async () => {
+      fetchMock
+        .mockResolvedValueOnce({ ok: false, status: 503, text: async () => 'down', headers: { get: () => null } })
+        .mockResolvedValueOnce(okJson({ issues: [] }));
+      const s = jira({ baseUrl: 'https://org.atlassian.net', email: 'svc@example.com', apiToken: 'token-abc' });
+      const issues = await s.searchIssues({ jql: 'project = PROJ' });
+      expect(issues).toEqual([]);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not retry on 400 (default withRetry)', async () => {
+      fetchMock.mockResolvedValueOnce({ ok: false, status: 400, text: async () => 'bad', headers: { get: () => null } });
+      const s = jira({ baseUrl: 'https://org.atlassian.net', email: 'svc@example.com', apiToken: 'token-abc' });
+      await expect(s.searchIssues({ jql: 'project = PROJ' })).rejects.toThrow(/JIRA 400/);
       expect(fetchMock).toHaveBeenCalledTimes(1);
     });
   });

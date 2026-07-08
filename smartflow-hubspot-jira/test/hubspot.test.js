@@ -22,10 +22,13 @@ function errJson(status, body = 'bad') {
   return { ok: false, status, json: async () => ({}), text: async () => body };
 }
 
+const noRetry = (fn) => fn();
+
 function newHubspot(overrides = {}) {
   return hubspot({
     token: overrides.token ?? 'pat-na1-test',
     jiraBaseUrl: overrides.jiraBaseUrl ?? 'https://org.atlassian.net',
+    withRetry: overrides.withRetry ?? noRetry,
   });
 }
 
@@ -177,6 +180,25 @@ describe('HubSpotService', () => {
       fetchMock.mockResolvedValueOnce(errJson(500, 'x'));
       const s = newHubspot();
       await expect(s.updateTask('task-1', { a: 'b' })).rejects.toThrow(/HubSpot 500/);
+    });
+  });
+
+  describe('retry integration', () => {
+    it('retries on 503 then succeeds (uses default withRetry)', async () => {
+      fetchMock
+        .mockResolvedValueOnce({ ok: false, status: 503, text: async () => 'down', headers: { get: () => null } })
+        .mockResolvedValueOnce(okJson({ total: 0, results: [] }));
+      const s = hubspot({ token: 'pat-na1-test', jiraBaseUrl: 'https://org.atlassian.net' }); // no withRetry override
+      const found = await s.findTaskByJiraKey('PROJ-1');
+      expect(found).toBeNull();
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not retry on 400 (default withRetry)', async () => {
+      fetchMock.mockResolvedValueOnce({ ok: false, status: 400, text: async () => 'bad', headers: { get: () => null } });
+      const s = hubspot({ token: 'pat-na1-test', jiraBaseUrl: 'https://org.atlassian.net' });
+      await expect(s.findTaskByJiraKey('PROJ-1')).rejects.toThrow(/HubSpot 400/);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
     });
   });
 });
