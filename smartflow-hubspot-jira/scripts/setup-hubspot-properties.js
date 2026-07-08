@@ -74,16 +74,47 @@ async function createProperty(prop) {
   }
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`HubSpot ${res.status} para ${prop.name}: ${text}`);
+    const err = new Error(`HubSpot ${res.status} para ${prop.name}: ${text}`);
+    err.responseText = text;
+    err.responseStatus = res.status;
+    throw err;
   }
   console.log(`creada: ${prop.name}`);
   return 'created';
 }
 
+function isTasksSchemaWriteUnsupported(body) {
+  if (!body || !body.errors || !body.errors[0]) return false;
+  const ctx = body.errors[0].context || {};
+  const scopes = ctx.requiredGranularScopes || [];
+  if (scopes.length === 0) return false;
+  return !scopes.some((s) => s.includes('tasks'));
+}
+
 async function setupProperties() {
+  let firstError = null;
   for (const prop of PROPERTIES) {
-    await createProperty(prop);
+    try {
+      await createProperty(prop);
+    } catch (err) {
+      firstError = err;
+      break;
+    }
   }
+  if (firstError && firstError.responseStatus === 403) {
+    let parsed = null;
+    try { parsed = JSON.parse(firstError.responseText); } catch (_) {}
+    if (parsed && isTasksSchemaWriteUnsupported(parsed)) {
+      console.log('\nHubSpot no expone un scope "tasks schema write" en su UI actual.');
+      console.log('Las propiedades del objeto Tasks se tienen que crear por la UI:');
+      console.log('  HubSpot -> Settings -> Properties -> Tasks -> Create property');
+      console.log('  (la lista exacta de las 7 propiedades esta en el README).');
+      console.log('\nSi ya las creaste a mano, ignora este error: el script se detiene');
+      console.log('al primer fallo pero las propiedades que ya existian fueron marcadas como skip.');
+      process.exit(2);
+    }
+  }
+  if (firstError) throw firstError;
 }
 
 async function main() {
@@ -100,7 +131,7 @@ async function main() {
 
 if (require.main === module) {
   main().catch((err) => {
-    console.error(err);
+    if (err && err.message) console.error(err.message);
     process.exit(1);
   });
 }
