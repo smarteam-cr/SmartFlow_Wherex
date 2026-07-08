@@ -18,6 +18,31 @@ function isRealMessage(msg, ownBotId) {
   return true;
 }
 
+const MENTION_RE = /<@([A-Z0-9]+)>/g;
+const MAILTO_RE = /<mailto:([^|>]+)(?:\|([^>]+))?>/g;
+const LINK_RE = /<(https?:\/\/[^|>]+)(?:\|([^>]+))?>/g;
+
+async function resolveMentions(text, client, nameCache) {
+  if (!text) return text;
+  const ids = [...new Set([...text.matchAll(MENTION_RE)].map((m) => m[1]))];
+  await Promise.all(
+    ids
+      .filter((id) => !nameCache.has(id))
+      .map(async (id) => {
+        try {
+          const { user } = await client.users.info({ user: id });
+          nameCache.set(id, user.profile?.real_name || user.real_name || user.name || id);
+        } catch {
+          nameCache.set(id, id);
+        }
+      })
+  );
+  return text
+    .replace(MENTION_RE, (_, id) => `@${nameCache.get(id)}`)
+    .replace(MAILTO_RE, (_, email, label) => label || email)
+    .replace(LINK_RE, (_, url, label) => label || url);
+}
+
 function createSlackService(client = new WebClient(process.env.SLACK_BOT_TOKEN)) {
   let ownBotId;
 
@@ -45,7 +70,13 @@ function createSlackService(client = new WebClient(process.env.SLACK_BOT_TOKEN))
       messages.push(...res.messages);
       cursor = res.response_metadata?.next_cursor;
     } while (cursor);
-    return messages.filter((msg) => isRealMessage(msg, botId));
+
+    const realMessages = messages.filter((msg) => isRealMessage(msg, botId));
+    const nameCache = new Map();
+    for (const msg of realMessages) {
+      msg.text = await resolveMentions(msg.text, client, nameCache);
+    }
+    return realMessages;
   }
 
   async function postListo(channel, threadTs) {
