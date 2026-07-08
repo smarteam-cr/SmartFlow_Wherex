@@ -37,6 +37,50 @@ describe('services/hubspot.createTicket', () => {
     fetchMock.mockResolvedValueOnce({ ok: false, status: 400, text: async () => 'bad request' });
     await expect(hubspot.createTicket({ ts: '1.1', text: 'x' }, 'C0TEST')).rejects.toThrow(/400/);
   });
+
+  it('creates a generic ticket and attaches the full text as a note for LISBOT reapertura requests', async () => {
+    fetchMock
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'ticket-1' }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'note-1' }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({}) });
+
+    const msg = {
+      ts: '1.1',
+      text: 'Hola! <@U1> gestionando la solicitud de reapertura!\n123-123-123\n01-01-2026-13:00\nm@m',
+      user: 'U1',
+    };
+    const result = await hubspot.createTicket(msg, 'C0TEST');
+
+    expect(result).toEqual({ id: 'ticket-1' });
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+
+    const [ticketUrl, ticketOpts] = fetchMock.mock.calls[0];
+    expect(ticketUrl).toBe('https://api.hubapi.com/crm/v3/objects/tickets');
+    const ticketBody = JSON.parse(ticketOpts.body);
+    expect(ticketBody.properties.subject).toBe('Solicitud de reapertura');
+    expect(ticketBody.properties.content).toBeUndefined();
+
+    const [noteUrl, noteOpts] = fetchMock.mock.calls[1];
+    expect(noteUrl).toBe('https://api.hubapi.com/crm/v3/objects/notes');
+    expect(JSON.parse(noteOpts.body).properties.hs_note_body).toBe(msg.text);
+
+    const [assocUrl, assocOpts] = fetchMock.mock.calls[2];
+    expect(assocUrl).toBe(
+      'https://api.hubapi.com/crm/v4/objects/notes/note-1/associations/default/tickets/ticket-1'
+    );
+    expect(assocOpts.method).toBe('PUT');
+  });
+
+  it('still resolves with the created ticket even if attaching the note fails', async () => {
+    fetchMock
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'ticket-1' }) })
+      .mockResolvedValueOnce({ ok: false, status: 500, text: async () => 'note error' });
+
+    const msg = { ts: '1.1', text: 'Hola! gestionando la solicitud de reapertura! x' };
+    const result = await hubspot.createTicket(msg, 'C0TEST');
+
+    expect(result).toEqual({ id: 'ticket-1' });
+  });
 });
 
 describe('services/hubspot.findTicketBySlackTs', () => {

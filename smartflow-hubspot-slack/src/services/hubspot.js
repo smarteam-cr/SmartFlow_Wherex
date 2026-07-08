@@ -7,26 +7,58 @@ function authHeaders() {
   };
 }
 
+function isReaperturaRequest(text) {
+  return /gestionando la solicitud de reapertura/i.test(text || '');
+}
+
+async function attachNote(ticketId, text) {
+  const noteRes = await fetch(`${BASE_URL}/crm/v3/objects/notes`, {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({
+      properties: { hs_note_body: text, hs_timestamp: Date.now() },
+    }),
+  });
+  if (!noteRes.ok) throw new Error(`HubSpot ${noteRes.status}: ${await noteRes.text()}`);
+  const note = await noteRes.json();
+
+  const assocRes = await fetch(
+    `${BASE_URL}/crm/v4/objects/notes/${note.id}/associations/default/tickets/${ticketId}`,
+    { method: 'PUT', headers: authHeaders() }
+  );
+  if (!assocRes.ok) throw new Error(`HubSpot ${assocRes.status}: ${await assocRes.text()}`);
+}
+
 async function createTicket(msg, channel) {
-  const body = {
-    properties: {
-      subject: (msg.text || 'Mensaje de Slack').slice(0, 120),
-      content: msg.text,
-      hs_pipeline: process.env.HS_PIPELINE_ID,
-      hs_pipeline_stage: process.env.HS_STAGE_NEW_ID,
-      slack_message_ts: msg.ts,
-      slack_channel_id: channel,
-      slack_thread_ts: msg.thread_ts || msg.ts,
-      slack_user: msg.user || '',
-    },
+  const isReapertura = isReaperturaRequest(msg.text);
+  const properties = {
+    subject: isReapertura ? 'Solicitud de reapertura' : (msg.text || 'Mensaje de Slack').slice(0, 120),
+    hs_pipeline: process.env.HS_PIPELINE_ID,
+    hs_pipeline_stage: process.env.HS_STAGE_NEW_ID,
+    slack_message_ts: msg.ts,
+    slack_channel_id: channel,
+    slack_thread_ts: msg.thread_ts || msg.ts,
+    slack_user: msg.user || '',
   };
+  if (!isReapertura) properties.content = msg.text;
+
   const res = await fetch(`${BASE_URL}/crm/v3/objects/tickets`, {
     method: 'POST',
     headers: authHeaders(),
-    body: JSON.stringify(body),
+    body: JSON.stringify({ properties }),
   });
   if (!res.ok) throw new Error(`HubSpot ${res.status}: ${await res.text()}`);
-  return res.json();
+  const ticket = await res.json();
+
+  if (isReapertura) {
+    try {
+      await attachNote(ticket.id, msg.text);
+    } catch (err) {
+      console.warn(`ticket ${ticket.id}: no se pudo adjuntar la nota de LISBOT:`, err.message);
+    }
+  }
+
+  return ticket;
 }
 
 async function findTicketBySlackTs(ts) {

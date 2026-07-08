@@ -63,7 +63,13 @@ function createWebhookRouter({ appSecret, hsStageCompletedId, hubspot, slack }) 
 
         if (ticket.properties.slack_listo_sent === 'true') continue;
 
-        await slack.postListo(ticket.properties.slack_channel_id, ticket.properties.slack_thread_ts);
+        const { slack_channel_id: channel, slack_thread_ts: threadTs } = ticket.properties;
+        if (!channel || !threadTs) {
+          console.warn(`ticket ${ticketId}: no es de la integración de Slack (falta slack_channel_id/slack_thread_ts), se omite`);
+          continue;
+        }
+
+        await slack.postListo(channel, String(threadTs));
         await hubspot.markListoSent(ticketId);
       }
 

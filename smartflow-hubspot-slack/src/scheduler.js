@@ -1,8 +1,15 @@
 const cron = require('node-cron');
 
 function startScheduler(ingestFn, intervalMin) {
+  let running = false;
   return cron.schedule(`*/${intervalMin} * * * *`, () => {
-    ingestFn().catch(console.error);
+    if (running) return;
+    running = true;
+    ingestFn()
+      .catch(console.error)
+      .finally(() => {
+        running = false;
+      });
   });
 }
 

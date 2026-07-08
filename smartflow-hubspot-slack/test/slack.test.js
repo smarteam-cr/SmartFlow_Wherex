@@ -4,8 +4,10 @@ const require = createRequire(import.meta.url);
 
 const historyMock = vi.fn();
 const postMessageMock = vi.fn();
+const authTestMock = vi.fn();
 
 const fakeClient = {
+  auth: { test: authTestMock },
   conversations: { history: historyMock },
   chat: { postMessage: postMessageMock },
 };
@@ -14,6 +16,7 @@ let slack;
 
 beforeEach(() => {
   vi.clearAllMocks();
+  authTestMock.mockResolvedValue({ bot_id: 'B_OWN' });
   const { createSlackService } = require('../src/services/slack');
   slack = createSlackService(fakeClient);
 });
@@ -37,19 +40,23 @@ describe('services/slack.getMessages', () => {
     expect(historyMock).toHaveBeenNthCalledWith(2, expect.objectContaining({ cursor: 'cursor1' }));
   });
 
-  it('filters out bot messages', async () => {
+  it('filters out only the bot\'s own messages and channel system events', async () => {
     historyMock.mockResolvedValueOnce({
       messages: [
         { ts: '1.1', text: 'human', user: 'U1' },
-        { ts: '1.2', text: 'bot', bot_id: 'B1' },
-        { ts: '1.3', text: 'sys', subtype: 'bot_message' },
+        { ts: '1.2', text: 'own reply', bot_id: 'B_OWN' },
+        { ts: '1.3', text: 'workflow bot', bot_id: 'B_OTHER' },
+        { ts: '1.4', text: 'joined', subtype: 'channel_join' },
       ],
       response_metadata: {},
     });
 
     const messages = await slack.getMessages('C0TEST', '1.0', '3.0');
 
-    expect(messages).toEqual([{ ts: '1.1', text: 'human', user: 'U1' }]);
+    expect(messages).toEqual([
+      { ts: '1.1', text: 'human', user: 'U1' },
+      { ts: '1.3', text: 'workflow bot', bot_id: 'B_OTHER' },
+    ]);
   });
 });
 
