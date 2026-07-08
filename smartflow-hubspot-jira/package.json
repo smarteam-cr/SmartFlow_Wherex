@@ -8,7 +8,10 @@
     "start": "node src/server.js",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "run-once": "node bin/run-once.js",
+    "list-jira-transitions": "node bin/list-jira-transitions.js",
+    "setup-hubspot": "node scripts/setup-hubspot-properties.js"
   },
   "dependencies": {
     "dotenv": "^16.4.5",

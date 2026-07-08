@@ -56,22 +56,34 @@ Copia `.env.example` a `.env` y completa los valores.
 - Transicion de issues (`Transition Issues`) si usas `JIRA_TRANSITION_DONE_ID`.
 
 **HubSpot (app privada):**
-- `tasks` (read/write) y `crm.objects.tasks.read/write`.
+- Scope para acceder al objeto `tasks`. El nombre exacto del scope depende de la versión de la UI de HubSpot. Si no lo encuentras, corre `npm run setup-hubspot` y el script te dira exactamente cual agregar (el mensaje de error de HubSpot lo nombra).
 - `tickets` ya NO se necesita (se reemplazó por Tasks en este flujo).
 
 ## Propiedades custom en HubSpot (crear una vez)
 
-Crea las siguientes propiedades en **Settings → Properties → Tasks**:
+**Opcion automatica (recomendada):**
 
-| Nombre interno | Tipo | Uso |
-|---|---|---|
-| `jira_issue_key` | Single-line text | **Clave de deduplicacion** |
-| `jira_project_key` | Single-line text | Proyecto de origen |
-| `jira_url` | Single-line text | Enlace directo al issue |
-| `jira_reporter` | Single-line text | Quien reporto |
-| `jira_assignee` | Single-line text | Asignado actual |
-| `jira_comment_id` | Single-line text | ID del comentario creado en el Flujo B |
-| `jira_listo_sent` | Booleano (single checkbox) | Idempotencia del Flujo B |
+```bash
+npm run setup-hubspot
+```
+
+Esto:
+1. Diagnostica si tu token tiene el scope para Tasks (te dice exactamente cual agregar si falta).
+2. Crea las 7 propiedades custom via API.
+
+**Opcion manual** (si prefieres crearlas a mano en la UI):
+
+**Settings → Properties → Tasks → Create property**
+
+| Nombre interno | Label | Tipo | Field type | Group |
+|---|---|---|---|---|
+| `jira_issue_key` | JIRA Issue Key | Single-line text | text | Task information |
+| `jira_project_key` | JIRA Project Key | Single-line text | text | Task information |
+| `jira_url` | JIRA URL | Single-line text | text | Task information |
+| `jira_reporter` | JIRA Reporter | Single-line text | text | Task information |
+| `jira_assignee` | JIRA Assignee | Single-line text | text | Task information |
+| `jira_comment_id` | JIRA Comment ID | Single-line text | text | Task information |
+| `jira_listo_sent` | JIRA Listo Sent | Booleano (checkbox) | booleancheckbox | Task information |
 
 ## Arranque local
 
@@ -86,6 +98,15 @@ Esto arranca:
 3. Express escuchando en `PORT` con:
    - `GET /healthz` (200 si Mongo responde, 503 si no)
    - `POST /webhooks/hubspot` (endpoint del callback de HubSpot)
+
+### Scripts utiles durante el setup
+
+| Comando | Para que |
+|---|---|
+| `npm run setup-hubspot` | Diagnostica scopes de HubSpot y crea las 7 propiedades custom via API |
+| `npm run list-jira-transitions` | Lista las transiciones disponibles (necesario para encontrar `JIRA_TRANSITION_DONE_ID`) |
+| `npm run list-jira-transitions PROJ-123` | Lista transiciones de un issue especifico |
+| `npm run run-once` | Ejecuta UNA corrida de ingesta sin esperar el cron (util para probar) |
 
 ## Tests
 
