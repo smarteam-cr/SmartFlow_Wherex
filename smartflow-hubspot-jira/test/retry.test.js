@@ -28,9 +28,14 @@ describe('utils/withRetry', () => {
   });
 
   it('retries on retryable status (5xx) up to N attempts then throws', async () => {
-    const fn = vi.fn().mockRejectedValueOnce(makeErr(503, 'down')).mockRejectedValueOnce(makeErr(502, 'gw')).mockRejectedValueOnce(makeErr(500, 'err'));
+    const fn = vi
+      .fn()
+      .mockRejectedValueOnce(makeErr(503, 'down'))
+      .mockRejectedValueOnce(makeErr(502, 'gw'))
+      .mockRejectedValueOnce(makeErr(500, 'err'))
+      .mockRejectedValueOnce(makeErr(500, 'err'));
     const sleep = vi.fn().mockResolvedValue(undefined);
-    await expect(withRetry(fn, { sleepFn: sleep, retries: 3, baseMs: 10 })).rejects.toThrow(/503/);
+    await expect(withRetry(fn, { sleepFn: sleep, retries: 3, baseMs: 10 })).rejects.toThrow(/500/);
     expect(fn).toHaveBeenCalledTimes(4); // initial + 3 retries
     expect(sleep).toHaveBeenCalledTimes(3);
     // Exponential backoff: 10, 20, 40
