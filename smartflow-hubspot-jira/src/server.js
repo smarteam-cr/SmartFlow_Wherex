@@ -1,6 +1,10 @@
 const express = require('express');
 const config = require('./config');
 const mongo = require('./db/mongo');
+const createJiraService = require('./services/jira');
+const createHubSpotService = require('./services/hubspot');
+const createIngestJob = require('./jobs/ingestJira');
+const { startScheduler, stopScheduler } = require('./scheduler');
 const createHealthRouter = require('./routes/health');
 const createWebhooksRouter = require('./routes/webhooks');
 
@@ -19,6 +23,24 @@ function createApp({ mongo: mongoClient = mongo } = {}) {
 async function start() {
   await mongo.connect(config.MONGO_URI);
 
+  const jira = createJiraService({
+    baseUrl: config.JIRA_BASE_URL,
+    email: config.JIRA_EMAIL,
+    apiToken: config.JIRA_API_TOKEN,
+  });
+  const hubspot = createHubSpotService({
+    token: config.HUBSPOT_TOKEN,
+    jiraBaseUrl: config.JIRA_BASE_URL,
+  });
+  const ingest = createIngestJob({
+    jira,
+    hubspot,
+    mongo,
+    projects: config.JIRA_PROJECT_KEYS,
+    pollIntervalMin: config.POLL_INTERVAL_MIN,
+  });
+  startScheduler({ ingest, intervalMin: config.POLL_INTERVAL_MIN });
+
   const app = createApp();
   const server = app.listen(config.PORT, () => {
     console.log(`Listening on port ${config.PORT}`);
@@ -26,6 +48,7 @@ async function start() {
 
   const shutdown = async (signal) => {
     console.log(`Received ${signal}, shutting down`);
+    stopScheduler();
     server.close(async () => {
       await mongo.close();
       process.exit(0);
