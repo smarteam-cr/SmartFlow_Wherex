@@ -8,14 +8,22 @@ const { startScheduler, stopScheduler } = require('./scheduler');
 const createHealthRouter = require('./routes/health');
 const createWebhooksRouter = require('./routes/webhooks');
 
-function createApp({ mongo: mongoClient = mongo } = {}) {
+function createApp({ mongo: mongoClient = mongo, jira, hubspot, transitionDoneId } = {}) {
   const app = express();
   app.set('trust proxy', true);
 
   app.use(express.json({ limit: '1mb' }));
 
   app.use(createHealthRouter({ mongo: mongoClient }));
-  app.use('/webhooks/hubspot', createWebhooksRouter({ secret: config.WEBHOOK_SECRET }));
+  app.use(
+    '/webhooks/hubspot',
+    createWebhooksRouter({
+      secret: config.WEBHOOK_SECRET,
+      jira,
+      hubspot,
+      transitionDoneId,
+    })
+  );
 
   return app;
 }
@@ -41,7 +49,7 @@ async function start() {
   });
   startScheduler({ ingest, intervalMin: config.POLL_INTERVAL_MIN });
 
-  const app = createApp();
+  const app = createApp({ jira, hubspot, transitionDoneId: config.JIRA_TRANSITION_DONE_ID });
   const server = app.listen(config.PORT, () => {
     console.log(`Listening on port ${config.PORT}`);
   });

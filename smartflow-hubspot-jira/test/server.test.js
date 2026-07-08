@@ -28,7 +28,11 @@ describe('createApp', () => {
     healthRouterFactory = require('../src/routes/health');
     webhooksRouterFactory = require('../src/routes/webhooks');
     const { createApp } = require('../src/server');
-    app = createApp({ mongo: realMongo });
+    app = createApp({
+      mongo: realMongo,
+      jira: { respondToIssue: () => {} },
+      hubspot: { getTask: () => {}, updateTask: () => {} },
+    });
   });
 
   it('GET /healthz returns 200 and ok status when mongo is up', async () => {
@@ -40,7 +44,11 @@ describe('createApp', () => {
   it('GET /healthz returns 503 when mongo ping throws', async () => {
     const fakeMongo = { ping: vi.fn().mockRejectedValue(new Error('boom')) };
     const { createApp } = require('../src/server');
-    const localApp = createApp({ mongo: fakeMongo });
+    const localApp = createApp({
+      mongo: fakeMongo,
+      jira: { respondToIssue: () => {} },
+      hubspot: { getTask: () => {}, updateTask: () => {} },
+    });
     const res = await request(localApp).get('/healthz');
     expect(res.status).toBe(503);
     expect(res.body).toEqual({ ok: false, mongo: 'down' });
@@ -69,16 +77,32 @@ describe('routes/health module', () => {
 });
 
 describe('routes/webhooks module', () => {
-  it('exports a factory that produces a router responding 501 (placeholder until F9)', async () => {
-    const express = require('express');
+  it('exports a factory that produces a router with a POST / handler', () => {
     const factory = require('../src/routes/webhooks');
-    const localApp = express();
-    localApp.use('/webhooks/hubspot', factory());
-    const res = await request(localApp)
-      .post('/webhooks/hubspot')
-      .set('Content-Type', 'application/json')
-      .send({});
-    expect(res.status).toBe(501);
-    expect(res.body).toEqual({ error: 'not implemented yet' });
+    const router = factory({
+      secret: 's',
+      jira: { respondToIssue: () => {} },
+      hubspot: { getTask: () => {}, updateTask: () => {} },
+    });
+    const stack = router.stack || [];
+    const hasPost = stack.some(
+      (layer) => layer.route && layer.route.path === '/' && layer.route.methods.post
+    );
+    expect(hasPost).toBe(true);
+  });
+
+  it('throws when secret is missing', () => {
+    const factory = require('../src/routes/webhooks');
+    expect(() => factory({ jira: {}, hubspot: {} })).toThrow(/secret/);
+  });
+
+  it('throws when jira is missing', () => {
+    const factory = require('../src/routes/webhooks');
+    expect(() => factory({ secret: 's', hubspot: {} })).toThrow(/jira/);
+  });
+
+  it('throws when hubspot is missing', () => {
+    const factory = require('../src/routes/webhooks');
+    expect(() => factory({ secret: 's', jira: {} })).toThrow(/hubspot/);
   });
 });
