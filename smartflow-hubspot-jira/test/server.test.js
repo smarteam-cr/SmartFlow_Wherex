@@ -47,15 +47,6 @@ describe('createApp', () => {
     expect(fakeMongo.ping).toHaveBeenCalledTimes(1);
   });
 
-  it('POST /webhooks/hubspot returns 501 in Hito 1 (placeholder)', async () => {
-    const res = await request(app)
-      .post('/webhooks/hubspot')
-      .set('Content-Type', 'application/json')
-      .send({ taskId: 't1' });
-    expect(res.status).toBe(501);
-    expect(res.body).toEqual({ error: 'not implemented yet' });
-  });
-
   it('rejects malformed JSON with 400 on the default json parser', async () => {
     const res = await request(app)
       .post('/some-json-endpoint')
