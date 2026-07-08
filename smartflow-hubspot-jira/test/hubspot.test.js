@@ -1,0 +1,182 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
+
+let fetchMock;
+let hubspot;
+let extractDescription;
+
+beforeEach(() => {
+  fetchMock = vi.fn();
+  vi.stubGlobal('fetch', fetchMock);
+  delete require.cache[require.resolve('../src/services/hubspot')];
+  delete require.cache[require.resolve('../src/utils/adf')];
+  hubspot = require('../src/services/hubspot');
+  extractDescription = require('../src/utils/adf');
+});
+
+function okJson(data) {
+  return { ok: true, status: 200, json: async () => data, text: async () => JSON.stringify(data) };
+}
+function errJson(status, body = 'bad') {
+  return { ok: false, status, json: async () => ({}), text: async () => body };
+}
+
+function newHubspot(overrides = {}) {
+  return hubspot({
+    token: overrides.token ?? 'pat-na1-test',
+    jiraBaseUrl: overrides.jiraBaseUrl ?? 'https://org.atlassian.net',
+  });
+}
+
+function sampleIssue(overrides = {}) {
+  return {
+    key: 'PROJ-1',
+    fields: {
+      summary: 'Bug en login',
+      description: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'detalle' }] }] },
+      reporter: { displayName: 'Ana' },
+      assignee: { displayName: 'Beto' },
+      project: { key: 'PROJ' },
+      updated: '2026-07-08T10:00:00.000+0000',
+    },
+    ...overrides,
+  };
+}
+
+describe('HubSpotService', () => {
+  describe('findTaskByJiraKey', () => {
+    it('returns null when no tasks match', async () => {
+      fetchMock.mockResolvedValueOnce(okJson({ total: 0, results: [] }));
+      const s = newHubspot();
+      const found = await s.findTaskByJiraKey('PROJ-1');
+      expect(found).toBeNull();
+      const [url, opts] = fetchMock.mock.calls[0];
+      expect(url).toBe('https://api.hubapi.com/crm/v3/objects/tasks/search');
+      const body = JSON.parse(opts.body);
+      expect(body.filterGroups[0].filters[0]).toEqual({ propertyName: 'jira_issue_key', operator: 'EQ', value: 'PROJ-1' });
+    });
+
+    it('returns the first result when total > 0', async () => {
+      fetchMock.mockResolvedValueOnce(okJson({ total: 1, results: [{ id: 'task-1', properties: { jira_issue_key: 'PROJ-1' } }] }));
+      const s = newHubspot();
+      const found = await s.findTaskByJiraKey('PROJ-1');
+      expect(found).toEqual({ id: 'task-1', properties: { jira_issue_key: 'PROJ-1' } });
+    });
+
+    it('throws on non-ok response', async () => {
+      fetchMock.mockResolvedValueOnce(errJson(500, 'boom'));
+      const s = newHubspot();
+      await expect(s.findTaskByJiraKey('PROJ-1')).rejects.toThrow(/HubSpot 500/);
+    });
+  });
+
+  describe('createTask', () => {
+    it('sends the expected task body with summary, jira props, and returns parsed result', async () => {
+      fetchMock.mockResolvedValueOnce(okJson({ id: 'task-1' }));
+      const s = newHubspot();
+      const result = await s.createTask(sampleIssue());
+      expect(result).toEqual({ id: 'task-1' });
+      const [url, opts] = fetchMock.mock.calls[0];
+      expect(url).toBe('https://api.hubapi.com/crm/v3/objects/tasks');
+      expect(opts.method).toBe('POST');
+      const body = JSON.parse(opts.body);
+      expect(body.properties.hs_task_subject).toBe('Bug en login');
+      expect(body.properties.hs_task_status).toBe('NOT_STARTED');
+      expect(body.properties.hs_task_priority).toBe('MEDIUM');
+      expect(body.properties.hs_task_body).toBe('detalle');
+      expect(body.properties.jira_issue_key).toBe('PROJ-1');
+      expect(body.properties.jira_project_key).toBe('PROJ');
+      expect(body.properties.jira_url).toBe('https://org.atlassian.net/browse/PROJ-1');
+      expect(body.properties.jira_reporter).toBe('Ana');
+      expect(body.properties.jira_assignee).toBe('Beto');
+    });
+
+    it('truncates subject to 120 chars and falls back to "Issue {key}" if no summary', async () => {
+      fetchMock.mockResolvedValueOnce(okJson({ id: 'task-1' }));
+      const s = newHubspot();
+      await s.createTask(sampleIssue({ fields: { summary: 'x'.repeat(200) } }));
+      const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+      expect(body.properties.hs_task_subject.length).toBe(120);
+    });
+
+    it('uses fallback subject when summary is empty', async () => {
+      fetchMock.mockResolvedValueOnce(okJson({ id: 'task-1' }));
+      const s = newHubspot();
+      await s.createTask(sampleIssue({ fields: { summary: '' } }));
+      const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+      expect(body.properties.hs_task_subject).toBe('Issue PROJ-1');
+    });
+
+    it('uses fallback subject when summary is missing', async () => {
+      fetchMock.mockResolvedValueOnce(okJson({ id: 'task-1' }));
+      const s = newHubspot();
+      const issue = { key: 'PROJ-2', fields: { description: null } };
+      await s.createTask(issue);
+      const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+      expect(body.properties.hs_task_subject).toBe('Issue PROJ-2');
+    });
+
+    it('uses empty string for hs_task_body when description is missing or non-ADF', async () => {
+      fetchMock.mockResolvedValueOnce(okJson({ id: 'task-1' }));
+      const s = newHubspot();
+      await s.createTask({ key: 'PROJ-3', fields: {} });
+      const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+      expect(body.properties.hs_task_body).toBe('');
+    });
+
+    it('handles missing reporter/assignee gracefully', async () => {
+      fetchMock.mockResolvedValueOnce(okJson({ id: 'task-1' }));
+      const s = newHubspot();
+      await s.createTask({ key: 'PROJ-4', fields: { summary: 's' } });
+      const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+      expect(body.properties.jira_reporter).toBe('');
+      expect(body.properties.jira_assignee).toBe('');
+      expect(body.properties.jira_project_key).toBe('');
+    });
+
+    it('throws on non-ok response', async () => {
+      fetchMock.mockResolvedValueOnce(errJson(400, 'invalid'));
+      const s = newHubspot();
+      await expect(s.createTask(sampleIssue())).rejects.toThrow(/HubSpot 400/);
+    });
+  });
+
+  describe('getTask', () => {
+    it('GETs the task with requested properties and returns properties', async () => {
+      fetchMock.mockResolvedValueOnce(okJson({ id: 'task-1', properties: { jira_issue_key: 'PROJ-1', jira_listo_sent: 'true' } }));
+      const s = newHubspot();
+      const props = await s.getTask('task-1', ['jira_issue_key', 'jira_listo_sent']);
+      expect(props).toEqual({ jira_issue_key: 'PROJ-1', jira_listo_sent: 'true' });
+      const [url, opts] = fetchMock.mock.calls[0];
+      expect(url).toBe('https://api.hubapi.com/crm/v3/objects/tasks/task-1?properties=jira_issue_key%2Cjira_listo_sent');
+      expect(opts.method).toBe('GET');
+    });
+
+    it('returns 404 as a structured error', async () => {
+      fetchMock.mockResolvedValueOnce(errJson(404, 'gone'));
+      const s = newHubspot();
+      await expect(s.getTask('task-gone', [])).rejects.toThrow(/HubSpot 404/);
+    });
+  });
+
+  describe('updateTask', () => {
+    it('PATCHes the task with new properties', async () => {
+      fetchMock.mockResolvedValueOnce(okJson({ id: 'task-1', properties: { jira_listo_sent: 'true' } }));
+      const s = newHubspot();
+      const res = await s.updateTask('task-1', { jira_listo_sent: 'true' });
+      expect(res).toEqual({ id: 'task-1', properties: { jira_listo_sent: 'true' } });
+      const [url, opts] = fetchMock.mock.calls[0];
+      expect(url).toBe('https://api.hubapi.com/crm/v3/objects/tasks/task-1');
+      expect(opts.method).toBe('PATCH');
+      const body = JSON.parse(opts.body);
+      expect(body.properties).toEqual({ jira_listo_sent: 'true' });
+    });
+
+    it('throws on non-ok response', async () => {
+      fetchMock.mockResolvedValueOnce(errJson(500, 'x'));
+      const s = newHubspot();
+      await expect(s.updateTask('task-1', { a: 'b' })).rejects.toThrow(/HubSpot 500/);
+    });
+  });
+});
