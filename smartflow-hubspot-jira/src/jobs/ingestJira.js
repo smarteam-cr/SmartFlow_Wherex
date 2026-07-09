@@ -74,18 +74,18 @@ function createIngestJob({
         }
 
         try {
-          const existing = await hubspot.findTaskByJiraKey(iss.key);
+          const existing = await hubspot.findTicketByJiraKey(iss.key);
           if (existing) {
             result.skipped += 1;
             continue;
           }
-          const created = await hubspot.createTask(iss);
+          const created = await hubspot.createTicket(iss);
           try {
             await mongo.markProcessed(project, iss.key, created.id);
           } catch (dupErr) {
             // Race against a parallel run: another ingest already inserted this issue.
-            // Count it as skipped and continue; the duplicate task is harmless because of
-            // findTaskByJiraKey on subsequent runs.
+            // Count it as skipped and continue; the duplicate ticket is harmless because of
+            // findTicketByJiraKey on subsequent runs.
             result.skipped += 1;
             result.errors.push({ project, issueKey: iss.key, error: `dedup race: ${dupErr.message}` });
             continue;

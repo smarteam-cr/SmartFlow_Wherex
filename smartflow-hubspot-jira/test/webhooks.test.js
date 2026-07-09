@@ -12,14 +12,16 @@ let app;
 
 const SECRET = 'whsec-test-secret';
 const HEADER = 'x-webhook-token';
+const CLOSED_STAGE_ID = 'stage-closed';
 
-function makeApp({ jira: jiraMock, hubspot: hubspotMock, secret = SECRET, transitionDoneId } = {}) {
+function makeApp({ jira: jiraMock, hubspot: hubspotMock, secret = SECRET, transitionDoneId, closedStageId = CLOSED_STAGE_ID } = {}) {
   const factory = createWebhooksRouter({
     secret,
     headerName: HEADER,
     jira: jiraMock,
     hubspot: hubspotMock,
     transitionDoneId,
+    closedStageId,
   });
   const localApp = express();
   localApp.use(express.json());
@@ -35,8 +37,8 @@ beforeEach(() => {
     respondToIssue: vi.fn(),
   };
   hubspot = {
-    getTask: vi.fn(),
-    updateTask: vi.fn(),
+    getTicket: vi.fn(),
+    updateTicket: vi.fn(),
   };
   app = makeApp({ jira, hubspot, transitionDoneId: '31' });
 });
@@ -55,10 +57,10 @@ describe('webhooks /webhooks/hubspot', () => {
       const res = await request(app)
         .post('/webhooks/hubspot')
         .set('Content-Type', 'application/json')
-        .send({ objectId: 'task-1' });
+        .send({ objectId: 'ticket-1' });
       expect(res.status).toBe(401);
       expect(res.body.error).toMatch(/unauthorized/i);
-      expect(hubspot.getTask).not.toHaveBeenCalled();
+      expect(hubspot.getTicket).not.toHaveBeenCalled();
     });
 
     it('returns 401 when the token header is wrong', async () => {
@@ -66,9 +68,9 @@ describe('webhooks /webhooks/hubspot', () => {
         .post('/webhooks/hubspot')
         .set(HEADER, 'wrong-token')
         .set('Content-Type', 'application/json')
-        .send({ objectId: 'task-1' });
+        .send({ objectId: 'ticket-1' });
       expect(res.status).toBe(401);
-      expect(hubspot.getTask).not.toHaveBeenCalled();
+      expect(hubspot.getTicket).not.toHaveBeenCalled();
     });
 
     it('uses a custom header name when configured', async () => {
@@ -77,54 +79,54 @@ describe('webhooks /webhooks/hubspot', () => {
         .post('/webhooks/hubspot')
         .set('X-Custom-Auth', SECRET)
         .set('Content-Type', 'application/json')
-        .send({ objectId: 'task-1' });
+        .send({ objectId: 'ticket-1' });
       // The default app uses HEADER, not X-Custom-Auth; this should be 401
       expect(res.status).toBe(401);
     });
   });
 
   describe('payload validation', () => {
-    it('returns 400 when the body has no extractable taskId', async () => {
+    it('returns 400 when the body has no extractable ticketId', async () => {
       const res = await post({});
       expect(res.status).toBe(400);
-      expect(res.body.error).toMatch(/taskId/);
+      expect(res.body.error).toMatch(/ticketId/);
     });
 
     it('accepts objectId at the top level', async () => {
-      hubspot.getTask.mockResolvedValue({ jira_issue_key: 'PROJ-1', jira_listo_sent: 'false', hs_task_status: 'COMPLETED' });
+      hubspot.getTicket.mockResolvedValue({ jira_issue_key: 'PROJ-1', jira_listo_sent: 'false', hs_pipeline_stage: CLOSED_STAGE_ID });
       jira.respondToIssue.mockResolvedValue('comment-99');
-      hubspot.updateTask.mockResolvedValue({});
-      const res = await post({ objectId: 'task-1' });
+      hubspot.updateTicket.mockResolvedValue({});
+      const res = await post({ objectId: 'ticket-1' });
       expect(res.status).toBe(200);
-      expect(hubspot.getTask).toHaveBeenCalledWith('task-1', expect.arrayContaining(['jira_issue_key', 'hs_task_status', 'jira_listo_sent']));
+      expect(hubspot.getTicket).toHaveBeenCalledWith('ticket-1', expect.arrayContaining(['jira_issue_key', 'hs_pipeline_stage', 'jira_listo_sent']));
     });
 
-    it('accepts taskId at the top level', async () => {
-      hubspot.getTask.mockResolvedValue({ jira_issue_key: 'PROJ-1', jira_listo_sent: 'false', hs_task_status: 'COMPLETED' });
+    it('accepts ticketId at the top level', async () => {
+      hubspot.getTicket.mockResolvedValue({ jira_issue_key: 'PROJ-1', jira_listo_sent: 'false', hs_pipeline_stage: CLOSED_STAGE_ID });
       jira.respondToIssue.mockResolvedValue('comment-1');
-      hubspot.updateTask.mockResolvedValue({});
-      const res = await post({ taskId: 'task-2' });
+      hubspot.updateTicket.mockResolvedValue({});
+      const res = await post({ ticketId: 'ticket-2' });
       expect(res.status).toBe(200);
-      expect(hubspot.getTask).toHaveBeenCalledWith('task-2', expect.any(Array));
+      expect(hubspot.getTicket).toHaveBeenCalledWith('ticket-2', expect.any(Array));
     });
   });
 
   describe('happy path', () => {
-    it('calls respondToIssue, updates the task with jira_listo_sent and jira_comment_id, returns 200', async () => {
-      hubspot.getTask.mockResolvedValue({
+    it('calls respondToIssue, updates the ticket with jira_listo_sent and jira_comment_id, returns 200', async () => {
+      hubspot.getTicket.mockResolvedValue({
         jira_issue_key: 'PROJ-1',
         jira_listo_sent: 'false',
-        hs_task_status: 'COMPLETED',
+        hs_pipeline_stage: CLOSED_STAGE_ID,
       });
       jira.respondToIssue.mockResolvedValue('comment-99');
-      hubspot.updateTask.mockResolvedValue({});
+      hubspot.updateTicket.mockResolvedValue({});
 
-      const res = await post({ objectId: 'task-1' });
+      const res = await post({ objectId: 'ticket-1' });
 
       expect(res.status).toBe(200);
       expect(res.body).toEqual({ ok: true, commentId: 'comment-99' });
       expect(jira.respondToIssue).toHaveBeenCalledWith('PROJ-1', { transitionDoneId: '31' });
-      expect(hubspot.updateTask).toHaveBeenCalledWith('task-1', {
+      expect(hubspot.updateTicket).toHaveBeenCalledWith('ticket-1', {
         jira_comment_id: 'comment-99',
         jira_listo_sent: 'true',
       });
@@ -132,89 +134,89 @@ describe('webhooks /webhooks/hubspot', () => {
 
     it('passes undefined transitionDoneId when not configured', async () => {
       const localApp = makeApp({ jira, hubspot, transitionDoneId: undefined });
-      hubspot.getTask.mockResolvedValue({ jira_issue_key: 'PROJ-1', jira_listo_sent: 'false', hs_task_status: 'COMPLETED' });
+      hubspot.getTicket.mockResolvedValue({ jira_issue_key: 'PROJ-1', jira_listo_sent: 'false', hs_pipeline_stage: CLOSED_STAGE_ID });
       jira.respondToIssue.mockResolvedValue('c1');
-      hubspot.updateTask.mockResolvedValue({});
+      hubspot.updateTicket.mockResolvedValue({});
       const res = await request(localApp)
         .post('/webhooks/hubspot')
         .set(HEADER, SECRET)
-        .send({ objectId: 'task-1' });
+        .send({ objectId: 'ticket-1' });
       expect(res.status).toBe(200);
       expect(jira.respondToIssue).toHaveBeenCalledWith('PROJ-1', { transitionDoneId: undefined });
     });
   });
 
   describe('skip paths (idempotency / non-actionable)', () => {
-    it('returns 200 skipped:gone when the task was deleted (404)', async () => {
+    it('returns 200 skipped:gone when the ticket was deleted (404)', async () => {
       const err = new Error('HubSpot 404: not here');
       err.status = 404;
-      hubspot.getTask.mockRejectedValue(err);
+      hubspot.getTicket.mockRejectedValue(err);
 
-      const res = await post({ objectId: 'task-gone' });
+      const res = await post({ objectId: 'ticket-gone' });
       expect(res.status).toBe(200);
       expect(res.body).toEqual({ ok: true, skipped: 'gone' });
       expect(jira.respondToIssue).not.toHaveBeenCalled();
     });
 
-    it('returns 200 skipped:not_done when hs_task_status is not COMPLETED', async () => {
-      hubspot.getTask.mockResolvedValue({
+    it('returns 200 skipped:not_done when hs_pipeline_stage is not the closed stage', async () => {
+      hubspot.getTicket.mockResolvedValue({
         jira_issue_key: 'PROJ-1',
         jira_listo_sent: 'false',
-        hs_task_status: 'IN_PROGRESS',
+        hs_pipeline_stage: 'stage-open',
       });
-      const res = await post({ objectId: 'task-1' });
+      const res = await post({ objectId: 'ticket-1' });
       expect(res.status).toBe(200);
       expect(res.body).toEqual({ ok: true, skipped: 'not_done' });
       expect(jira.respondToIssue).not.toHaveBeenCalled();
     });
 
-    it('returns 200 skipped:no_key when the task has no jira_issue_key', async () => {
-      hubspot.getTask.mockResolvedValue({
+    it('returns 200 skipped:no_key when the ticket has no jira_issue_key', async () => {
+      hubspot.getTicket.mockResolvedValue({
         jira_listo_sent: 'false',
-        hs_task_status: 'COMPLETED',
+        hs_pipeline_stage: CLOSED_STAGE_ID,
       });
-      const res = await post({ objectId: 'task-1' });
+      const res = await post({ objectId: 'ticket-1' });
       expect(res.status).toBe(200);
       expect(res.body).toEqual({ ok: true, skipped: 'no_key' });
       expect(jira.respondToIssue).not.toHaveBeenCalled();
     });
 
     it('returns 200 skipped:duplicate when jira_listo_sent is already true', async () => {
-      hubspot.getTask.mockResolvedValue({
+      hubspot.getTicket.mockResolvedValue({
         jira_issue_key: 'PROJ-1',
         jira_listo_sent: 'true',
-        hs_task_status: 'COMPLETED',
+        hs_pipeline_stage: CLOSED_STAGE_ID,
       });
-      const res = await post({ objectId: 'task-1' });
+      const res = await post({ objectId: 'ticket-1' });
       expect(res.status).toBe(200);
       expect(res.body).toEqual({ ok: true, skipped: 'duplicate' });
       expect(jira.respondToIssue).not.toHaveBeenCalled();
-      expect(hubspot.updateTask).not.toHaveBeenCalled();
+      expect(hubspot.updateTicket).not.toHaveBeenCalled();
     });
   });
 
   describe('error paths', () => {
     it('returns 500 when jira.respondToIssue throws (HubSpot will retry)', async () => {
-      hubspot.getTask.mockResolvedValue({
+      hubspot.getTicket.mockResolvedValue({
         jira_issue_key: 'PROJ-1',
         jira_listo_sent: 'false',
-        hs_task_status: 'COMPLETED',
+        hs_pipeline_stage: CLOSED_STAGE_ID,
       });
       jira.respondToIssue.mockRejectedValue(new Error('JIRA 503'));
-      const res = await post({ objectId: 'task-1' });
+      const res = await post({ objectId: 'ticket-1' });
       expect(res.status).toBe(500);
-      expect(hubspot.updateTask).not.toHaveBeenCalled();
+      expect(hubspot.updateTicket).not.toHaveBeenCalled();
     });
 
-    it('returns 500 when hubspot.updateTask throws (HubSpot will retry)', async () => {
-      hubspot.getTask.mockResolvedValue({
+    it('returns 500 when hubspot.updateTicket throws (HubSpot will retry)', async () => {
+      hubspot.getTicket.mockResolvedValue({
         jira_issue_key: 'PROJ-1',
         jira_listo_sent: 'false',
-        hs_task_status: 'COMPLETED',
+        hs_pipeline_stage: CLOSED_STAGE_ID,
       });
       jira.respondToIssue.mockResolvedValue('comment-99');
-      hubspot.updateTask.mockRejectedValue(new Error('HubSpot 500'));
-      const res = await post({ objectId: 'task-1' });
+      hubspot.updateTicket.mockRejectedValue(new Error('HubSpot 500'));
+      const res = await post({ objectId: 'ticket-1' });
       expect(res.status).toBe(500);
     });
   });

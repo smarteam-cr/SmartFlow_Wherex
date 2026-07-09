@@ -9,6 +9,9 @@ const REQUIRED = {
   JIRA_API_TOKEN: 'token-abc',
   JIRA_PROJECT_KEY: 'PROJ',
   HUBSPOT_TOKEN: 'pat-na1-test',
+  HUBSPOT_TICKET_PIPELINE_ID: 'pipeline-1',
+  HUBSPOT_TICKET_STAGE_NEW_ID: 'stage-new',
+  HUBSPOT_TICKET_STAGE_CLOSED_ID: 'stage-closed',
   WEBHOOK_SECRET: 'whsec-test',
   MONGO_URI: 'mongodb://localhost:27017/test',
 };
@@ -101,6 +104,27 @@ describe('config', () => {
     setEnv({ HUBSPOT_TOKEN: undefined });
     resetConfigModule();
     expect(() => require('../src/config')).toThrow(/HUBSPOT_TOKEN/);
+  });
+
+  it('throws when HUBSPOT_TICKET_PIPELINE_ID is missing', () => {
+    clearEnv();
+    setEnv({ HUBSPOT_TICKET_PIPELINE_ID: undefined });
+    resetConfigModule();
+    expect(() => require('../src/config')).toThrow(/HUBSPOT_TICKET_PIPELINE_ID/);
+  });
+
+  it('throws when HUBSPOT_TICKET_STAGE_NEW_ID is missing', () => {
+    clearEnv();
+    setEnv({ HUBSPOT_TICKET_STAGE_NEW_ID: undefined });
+    resetConfigModule();
+    expect(() => require('../src/config')).toThrow(/HUBSPOT_TICKET_STAGE_NEW_ID/);
+  });
+
+  it('throws when HUBSPOT_TICKET_STAGE_CLOSED_ID is missing', () => {
+    clearEnv();
+    setEnv({ HUBSPOT_TICKET_STAGE_CLOSED_ID: undefined });
+    resetConfigModule();
+    expect(() => require('../src/config')).toThrow(/HUBSPOT_TICKET_STAGE_CLOSED_ID/);
   });
 
   it('throws when WEBHOOK_SECRET is missing', () => {

@@ -13,7 +13,7 @@ function parseRetryAfterMs(res) {
   return null;
 }
 
-function createHubSpotService({ token, jiraBaseUrl = '', withRetry } = {}) {
+function createHubSpotService({ token, jiraBaseUrl = '', pipelineId, newStageId, withRetry } = {}) {
   if (!token) throw new Error('HubSpotService: token is required');
   const withRetryFn = withRetry || defaultWithRetry;
 
@@ -53,8 +53,8 @@ function createHubSpotService({ token, jiraBaseUrl = '', withRetry } = {}) {
     return res.json();
   }
 
-  async function findTaskByJiraKey(issueKey) {
-    const data = await http('POST', '/crm/v3/objects/tasks/search', {
+  async function findTicketByJiraKey(issueKey) {
+    const data = await http('POST', '/crm/v3/objects/tickets/search', {
       body: {
         filterGroups: [
           { filters: [{ propertyName: 'jira_issue_key', operator: 'EQ', value: issueKey }] },
@@ -73,12 +73,13 @@ function createHubSpotService({ token, jiraBaseUrl = '', withRetry } = {}) {
     const fields = issue.fields || {};
     const summary = (fields.summary || '').trim();
     const subject = summary ? summary.slice(0, 120) : `Issue ${issue.key}`;
-    const body = extractDescription(fields.description) || '';
+    const content = extractDescription(fields.description) || '';
     return {
-      hs_task_subject: subject,
-      hs_task_body: body,
-      hs_task_status: 'NOT_STARTED',
-      hs_task_priority: 'MEDIUM',
+      subject,
+      content,
+      hs_pipeline: pipelineId,
+      hs_pipeline_stage: newStageId,
+      hs_ticket_priority: 'MEDIUM',
       jira_issue_key: issue.key,
       jira_project_key: fields.project?.key || '',
       jira_url: cleanJiraBaseUrl ? `${cleanJiraBaseUrl}/browse/${issue.key}` : '',
@@ -87,30 +88,30 @@ function createHubSpotService({ token, jiraBaseUrl = '', withRetry } = {}) {
     };
   }
 
-  async function createTask(issue) {
-    return http('POST', '/crm/v3/objects/tasks', {
+  async function createTicket(issue) {
+    return http('POST', '/crm/v3/objects/tickets', {
       body: { properties: buildPropertiesFromIssue(issue) },
     });
   }
 
-  async function getTask(taskId, properties = []) {
-    const data = await http('GET', `/crm/v3/objects/tasks/${encodeURIComponent(taskId)}`, {
+  async function getTicket(ticketId, properties = []) {
+    const data = await http('GET', `/crm/v3/objects/tickets/${encodeURIComponent(ticketId)}`, {
       query: properties.length ? { properties: properties.join(',') } : undefined,
     });
     return data.properties || {};
   }
 
-  async function updateTask(taskId, properties) {
-    return http('PATCH', `/crm/v3/objects/tasks/${encodeURIComponent(taskId)}`, {
+  async function updateTicket(ticketId, properties) {
+    return http('PATCH', `/crm/v3/objects/tickets/${encodeURIComponent(ticketId)}`, {
       body: { properties },
     });
   }
 
   return {
-    findTaskByJiraKey,
-    createTask,
-    getTask,
-    updateTask,
+    findTicketByJiraKey,
+    createTicket,
+    getTicket,
+    updateTicket,
   };
 }
 

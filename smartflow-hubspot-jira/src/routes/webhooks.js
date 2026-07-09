@@ -2,10 +2,10 @@ const express = require('express');
 
 const DEFAULT_HEADER = 'x-webhook-token';
 
-function extractTaskId(body) {
+function extractTicketId(body) {
   if (!body || typeof body !== 'object') return null;
   if (body.objectId) return String(body.objectId);
-  if (body.taskId) return String(body.taskId);
+  if (body.ticketId) return String(body.ticketId);
   if (body.properties && body.properties.hs_object_id) {
     return String(body.properties.hs_object_id);
   }
@@ -18,6 +18,7 @@ function createWebhooksRouter({
   jira,
   hubspot,
   transitionDoneId,
+  closedStageId,
 } = {}) {
   if (!secret) throw new Error('createWebhooksRouter: secret is required');
   if (!jira) throw new Error('createWebhooksRouter: jira is required');
@@ -31,43 +32,43 @@ function createWebhooksRouter({
       return res.status(401).json({ error: 'unauthorized' });
     }
 
-    const taskId = extractTaskId(req.body);
-    if (!taskId) {
-      return res.status(400).json({ error: 'taskId missing from payload' });
+    const ticketId = extractTicketId(req.body);
+    if (!ticketId) {
+      return res.status(400).json({ error: 'ticketId missing from payload' });
     }
 
-    let taskProps;
+    let ticketProps;
     try {
-      taskProps = await hubspot.getTask(taskId, [
+      ticketProps = await hubspot.getTicket(ticketId, [
         'jira_issue_key',
         'jira_comment_id',
         'jira_listo_sent',
-        'hs_task_status',
+        'hs_pipeline_stage',
       ]);
     } catch (err) {
       if (err && err.status === 404) {
         return res.status(200).json({ ok: true, skipped: 'gone' });
       }
       // Other HubSpot errors: let HubSpot retry
-      console.error('webhook getTask failed:', err);
+      console.error('webhook getTicket failed:', err);
       return res.status(500).json({ error: 'upstream lookup failed' });
     }
 
-    if (taskProps.hs_task_status !== 'COMPLETED') {
+    if (ticketProps.hs_pipeline_stage !== closedStageId) {
       return res.status(200).json({ ok: true, skipped: 'not_done' });
     }
 
-    if (taskProps.jira_listo_sent === 'true') {
+    if (ticketProps.jira_listo_sent === 'true') {
       return res.status(200).json({ ok: true, skipped: 'duplicate' });
     }
 
-    if (!taskProps.jira_issue_key) {
+    if (!ticketProps.jira_issue_key) {
       return res.status(200).json({ ok: true, skipped: 'no_key' });
     }
 
     let commentId;
     try {
-      commentId = await jira.respondToIssue(taskProps.jira_issue_key, {
+      commentId = await jira.respondToIssue(ticketProps.jira_issue_key, {
         transitionDoneId,
       });
     } catch (err) {
@@ -76,13 +77,13 @@ function createWebhooksRouter({
     }
 
     try {
-      await hubspot.updateTask(taskId, {
+      await hubspot.updateTicket(ticketId, {
         jira_comment_id: commentId,
         jira_listo_sent: 'true',
       });
     } catch (err) {
-      console.error('webhook updateTask failed:', err);
-      return res.status(500).json({ error: 'task update failed' });
+      console.error('webhook updateTicket failed:', err);
+      return res.status(500).json({ error: 'ticket update failed' });
     }
 
     return res.status(200).json({ ok: true, commentId });
@@ -93,4 +94,4 @@ function createWebhooksRouter({
 
 module.exports = createWebhooksRouter;
 module.exports.createWebhooksRouter = createWebhooksRouter;
-module.exports.extractTaskId = extractTaskId;
+module.exports.extractTicketId = extractTicketId;

@@ -31,9 +31,9 @@ function fakeJira(issuesByJql = {}) {
 }
 function fakeHubspot({ existingKeys = new Set(), created = [] } = {}) {
   return {
-    findTaskByJiraKey: vi.fn(async (key) => (existingKeys.has(key) ? { id: `existing-${key}` } : null)),
-    createTask: vi.fn(async (issue) => {
-      const id = `task-${issue.key}`;
+    findTicketByJiraKey: vi.fn(async (key) => (existingKeys.has(key) ? { id: `existing-${key}` } : null)),
+    createTicket: vi.fn(async (issue) => {
+      const id = `ticket-${issue.key}`;
       created.push(issue.key);
       return { id };
     }),
@@ -105,7 +105,7 @@ describe('jobs/ingestJira', () => {
     const result = await ingest.run({ now: NOW });
     expect(result.created).toBe(1);
     expect(result.skipped).toBe(1);
-    expect(hubspot.createTask).toHaveBeenCalledTimes(1);
+    expect(hubspot.createTicket).toHaveBeenCalledTimes(1);
   });
 
   it('records each created issue in mongo with project, issueKey, taskId', async () => {
@@ -164,10 +164,10 @@ describe('jobs/ingestJira', () => {
       ],
     });
     const hubspot = {
-      findTaskByJiraKey: vi.fn(async () => null),
-      createTask: vi.fn(async (iss) => {
+      findTicketByJiraKey: vi.fn(async () => null),
+      createTicket: vi.fn(async (iss) => {
         if (iss.key === 'PROJ-2') throw new Error('HubSpot 400');
-        return { id: `task-${iss.key}` };
+        return { id: `ticket-${iss.key}` };
       }),
     };
     const ingest = createIngestJob({ jira, hubspot, mongo, projects: ['PROJ'], pollIntervalMin: 5 });

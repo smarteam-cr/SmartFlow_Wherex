@@ -33,6 +33,9 @@ describe('smoke: npm start end-to-end', () => {
     process.env.WEBHOOK_SECRET = 'whsec-smoke';
     process.env.MONGO_URI = memUri;
     process.env.PORT = '0'; // OS-assigned
+    process.env.HUBSPOT_TICKET_PIPELINE_ID = 'pipeline-1';
+    process.env.HUBSPOT_TICKET_STAGE_NEW_ID = 'stage-new';
+    process.env.HUBSPOT_TICKET_STAGE_CLOSED_ID = 'stage-closed';
 
     // Silence the cron and node-cron
     const cron = require('node-cron');
