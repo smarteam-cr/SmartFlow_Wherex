@@ -255,8 +255,8 @@ POLL_INTERVAL_MIN=5
 PORT=3000
 WEBHOOK_SECRET=cadena-larga-secreta
 
-# Mongo
-MONGO_URI=mongodb://localhost:27017/slack_hubspot
+# Mongo (compartida con smartflow-hubspot-jira: base WherEXdb)
+MONGO_URI=mongodb://localhost:27017/WherEXdb
 ```
 
 **Scopes de Slack (Bot Token):** `channels:history` (canal público) o `groups:history` (privado), `chat:write`, y `channels:read`/`groups:read` para resolver el canal. Invita al bot al canal.

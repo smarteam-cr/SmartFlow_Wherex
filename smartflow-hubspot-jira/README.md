@@ -49,7 +49,30 @@ Copia `.env.example` a `.env` y completa los valores.
 | `HUBSPOT_TICKET_STAGE_CLOSED_ID` | si | — | Etapa que dispara el Flujo B (callback a JIRA) |
 | `POLL_INTERVAL_MIN` | no | 5 | Minutos entre corridas de ingesta (1–59) |
 | `PORT` | no | 3000 | Puerto HTTP |
-| `MONGO_URI` | si | — | URI de MongoDB (ej. `mongodb://localhost:27017/jira_hubspot`) |
+| `MONGO_URI` | si | — | URI de MongoDB (ej. `mongodb://localhost:27017/WherEXdb`). El nombre de DB recomendado es `WherEXdb`, compartida con `smartflow-hubspot-slack` — ver "Base de datos compartida" más abajo |
+
+### Base de datos compartida
+
+`WherEXdb` es una **única base de datos MongoDB** usada en paralelo por
+`smartflow-hubspot-jira` (este proyecto) y por su proyecto hermano
+`smartflow-hubspot-slack`. No hay aislamiento por DB; cada proyecto usa sus
+propias colecciones con nombres distintos y, por lo tanto, no colisionan:
+
+| | `smartflow-hubspot-jira` | `smartflow-hubspot-slack` |
+|---|---|---|
+| Colección de dedupe | `processed_issues` (índice único `{project, issueKey}`) | `processed_messages` (índice único `{channel, ts}`) |
+| Doc de watermark | `_id: 'jira_ingest'` en `watermark` | `_id: 'slack_ingest'` en `watermark` |
+
+Al desplegar, ambos proyectos deben apuntar con su `MONGO_URI` a la **misma**
+instancia de Mongo y al mismo nombre de DB (`/WherEXdb`). En desarrollo local
+con Docker, levantá una sola vez una instancia compartida, por ejemplo:
+
+```bash
+docker run -d --name shared-mongo -p 27017:27017 -v shared_mongo_data:/data/db mongo:7
+```
+
+y usá `MONGO_URI=mongodb://localhost:27017/WherEXdb` en el `.env` de ambos
+proyectos.
 
 ## Permisos requeridos
 
@@ -130,9 +153,7 @@ cp .env.example .env  # editar valores
 docker compose up -d
 ```
 
-`docker-compose.yml` levanta:
-- `app` — el monolito (Node 20 alpine) en el puerto 3000
-- `mongo` — MongoDB 7 con volumen persistente
+`docker-compose.yml` levanta únicamente el servicio `app` (el monolito Node 20 alpine en el puerto 3000). **No** levanta su propio MongoDB: este proyecto comparte la base `WherEXdb` con `smartflow-hubspot-slack` (ver "Base de datos compartida"). El `MONGO_URI` del `.env` debe apuntar a esa instancia de Mongo externa ya gestionada aparte en el servidor.
 
 `Dockerfile` incluye un `HEALTHCHECK` contra `GET /healthz` que Docker respeta para reportar el estado del contenedor.
 

@@ -56,8 +56,8 @@ POLL_INTERVAL_MIN=5
 # API
 PORT=3000
 
-# Mongo
-MONGO_URI=mongodb://localhost:27017/slack_hubspot
+# Mongo (compartida con smartflow-hubspot-jira: base WherEXdb)
+MONGO_URI=mongodb://localhost:27017/WherEXdb
 ```
 
 - **Slack:** el bot necesita los scopes `channels:history` (o `groups:history` si el canal es privado), `chat:write`, y debe estar invitado al canal.
@@ -78,10 +78,10 @@ MONGO_URI=mongodb://localhost:27017/slack_hubspot
    npm install
    ```
 
-2. Levantar MongoDB con Docker:
+2. Levantar MongoDB con Docker (una sola instancia compartida con `smartflow-hubspot-jira`):
 
    ```bash
-   docker compose up -d mongo
+   docker run -d --name shared-mongo -p 27017:27017 -v shared_mongo_data:/data/db mongo:7
    ```
 
 3. Arrancar la app:
@@ -94,13 +94,36 @@ MONGO_URI=mongodb://localhost:27017/slack_hubspot
 
 ### Con Docker Compose completo
 
-`docker-compose.yml` también define el servicio `app` (build desde el `Dockerfile`), por lo que se puede levantar todo con:
+`docker-compose.yml` define únicamente el servicio `app` (build desde el `Dockerfile`), por lo que se puede levantar la app con:
 
 ```bash
 docker compose up -d
 ```
 
-En ese caso `MONGO_URI` se sobreescribe internamente a `mongodb://mongo:27017/slack_hubspot` (red interna de Docker), así que no hace falta tocar el `.env` para ese modo.
+El `MONGO_URI` se toma del `env_file: .env` y debe apuntar a la instancia de MongoDB compartida (`WherEXdb` — ver "Base de datos compartida"). Como el `docker-compose.yml` ya no levanta su propio contenedor `mongo`, no hace falta nada adicional para desarrollo local más allá de tener un Mongo accesible en `mongodb://localhost:27017`.
+
+### Base de datos compartida
+
+`WherEXdb` es una **única base de datos MongoDB** usada en paralelo por
+`smartflow-hubspot-slack` (este proyecto) y por su proyecto hermano
+`smartflow-hubspot-jira`. No hay aislamiento por DB; cada proyecto usa sus
+propias colecciones con nombres distintos y, por lo tanto, no colisionan:
+
+| | `smartflow-hubspot-jira` | `smartflow-hubspot-slack` |
+|---|---|---|
+| Colección de dedupe | `processed_issues` (índice único `{project, issueKey}`) | `processed_messages` (índice único `{channel, ts}`) |
+| Doc de watermark | `_id: 'jira_ingest'` en `watermark` | `_id: 'slack_ingest'` en `watermark` |
+
+Al desplegar, ambos proyectos deben apuntar con su `MONGO_URI` a la **misma**
+instancia de Mongo y al mismo nombre de DB (`/WherEXdb`). En desarrollo local
+con Docker, levantá una sola vez una instancia compartida:
+
+```bash
+docker run -d --name shared-mongo -p 27017:27017 -v shared_mongo_data:/data/db mongo:7
+```
+
+y usá `MONGO_URI=mongodb://localhost:27017/WherEXdb` en el `.env` de ambos
+proyectos.
 
 ## Tests
 
