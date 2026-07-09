@@ -28,6 +28,8 @@ function newHubspot(overrides = {}) {
   return hubspot({
     token: overrides.token ?? 'pat-na1-test',
     jiraBaseUrl: overrides.jiraBaseUrl ?? 'https://org.atlassian.net',
+    pipelineId: overrides.pipelineId ?? 'pipeline-1',
+    newStageId: overrides.newStageId ?? 'stage-new',
     withRetry: overrides.withRetry ?? noRetry,
   });
 }
@@ -48,46 +50,47 @@ function sampleIssue(overrides = {}) {
 }
 
 describe('HubSpotService', () => {
-  describe('findTaskByJiraKey', () => {
-    it('returns null when no tasks match', async () => {
+  describe('findTicketByJiraKey', () => {
+    it('returns null when no tickets match', async () => {
       fetchMock.mockResolvedValueOnce(okJson({ total: 0, results: [] }));
       const s = newHubspot();
-      const found = await s.findTaskByJiraKey('PROJ-1');
+      const found = await s.findTicketByJiraKey('PROJ-1');
       expect(found).toBeNull();
       const [url, opts] = fetchMock.mock.calls[0];
-      expect(url).toBe('https://api.hubapi.com/crm/v3/objects/tasks/search');
+      expect(url).toBe('https://api.hubapi.com/crm/v3/objects/tickets/search');
       const body = JSON.parse(opts.body);
       expect(body.filterGroups[0].filters[0]).toEqual({ propertyName: 'jira_issue_key', operator: 'EQ', value: 'PROJ-1' });
     });
 
     it('returns the first result when total > 0', async () => {
-      fetchMock.mockResolvedValueOnce(okJson({ total: 1, results: [{ id: 'task-1', properties: { jira_issue_key: 'PROJ-1' } }] }));
+      fetchMock.mockResolvedValueOnce(okJson({ total: 1, results: [{ id: 'ticket-1', properties: { jira_issue_key: 'PROJ-1' } }] }));
       const s = newHubspot();
-      const found = await s.findTaskByJiraKey('PROJ-1');
-      expect(found).toEqual({ id: 'task-1', properties: { jira_issue_key: 'PROJ-1' } });
+      const found = await s.findTicketByJiraKey('PROJ-1');
+      expect(found).toEqual({ id: 'ticket-1', properties: { jira_issue_key: 'PROJ-1' } });
     });
 
     it('throws on non-ok response', async () => {
       fetchMock.mockResolvedValueOnce(errJson(500, 'boom'));
       const s = newHubspot();
-      await expect(s.findTaskByJiraKey('PROJ-1')).rejects.toThrow(/HubSpot 500/);
+      await expect(s.findTicketByJiraKey('PROJ-1')).rejects.toThrow(/HubSpot 500/);
     });
   });
 
-  describe('createTask', () => {
-    it('sends the expected task body with summary, jira props, and returns parsed result', async () => {
-      fetchMock.mockResolvedValueOnce(okJson({ id: 'task-1' }));
+  describe('createTicket', () => {
+    it('sends the expected ticket body with summary, jira props, and returns parsed result', async () => {
+      fetchMock.mockResolvedValueOnce(okJson({ id: 'ticket-1' }));
       const s = newHubspot();
-      const result = await s.createTask(sampleIssue());
-      expect(result).toEqual({ id: 'task-1' });
+      const result = await s.createTicket(sampleIssue());
+      expect(result).toEqual({ id: 'ticket-1' });
       const [url, opts] = fetchMock.mock.calls[0];
-      expect(url).toBe('https://api.hubapi.com/crm/v3/objects/tasks');
+      expect(url).toBe('https://api.hubapi.com/crm/v3/objects/tickets');
       expect(opts.method).toBe('POST');
       const body = JSON.parse(opts.body);
-      expect(body.properties.hs_task_subject).toBe('Bug en login');
-      expect(body.properties.hs_task_status).toBe('NOT_STARTED');
-      expect(body.properties.hs_task_priority).toBe('MEDIUM');
-      expect(body.properties.hs_task_body).toBe('detalle');
+      expect(body.properties.subject).toBe('Bug en login');
+      expect(body.properties.hs_pipeline).toBe('pipeline-1');
+      expect(body.properties.hs_pipeline_stage).toBe('stage-new');
+      expect(body.properties.hs_ticket_priority).toBe('MEDIUM');
+      expect(body.properties.content).toBe('detalle');
       expect(body.properties.jira_issue_key).toBe('PROJ-1');
       expect(body.properties.jira_project_key).toBe('PROJ');
       expect(body.properties.jira_url).toBe('https://org.atlassian.net/browse/PROJ-1');
@@ -96,42 +99,42 @@ describe('HubSpotService', () => {
     });
 
     it('truncates subject to 120 chars and falls back to "Issue {key}" if no summary', async () => {
-      fetchMock.mockResolvedValueOnce(okJson({ id: 'task-1' }));
+      fetchMock.mockResolvedValueOnce(okJson({ id: 'ticket-1' }));
       const s = newHubspot();
-      await s.createTask(sampleIssue({ fields: { summary: 'x'.repeat(200) } }));
+      await s.createTicket(sampleIssue({ fields: { summary: 'x'.repeat(200) } }));
       const body = JSON.parse(fetchMock.mock.calls[0][1].body);
-      expect(body.properties.hs_task_subject.length).toBe(120);
+      expect(body.properties.subject.length).toBe(120);
     });
 
     it('uses fallback subject when summary is empty', async () => {
-      fetchMock.mockResolvedValueOnce(okJson({ id: 'task-1' }));
+      fetchMock.mockResolvedValueOnce(okJson({ id: 'ticket-1' }));
       const s = newHubspot();
-      await s.createTask(sampleIssue({ fields: { summary: '' } }));
+      await s.createTicket(sampleIssue({ fields: { summary: '' } }));
       const body = JSON.parse(fetchMock.mock.calls[0][1].body);
-      expect(body.properties.hs_task_subject).toBe('Issue PROJ-1');
+      expect(body.properties.subject).toBe('Issue PROJ-1');
     });
 
     it('uses fallback subject when summary is missing', async () => {
-      fetchMock.mockResolvedValueOnce(okJson({ id: 'task-1' }));
+      fetchMock.mockResolvedValueOnce(okJson({ id: 'ticket-1' }));
       const s = newHubspot();
       const issue = { key: 'PROJ-2', fields: { description: null } };
-      await s.createTask(issue);
+      await s.createTicket(issue);
       const body = JSON.parse(fetchMock.mock.calls[0][1].body);
-      expect(body.properties.hs_task_subject).toBe('Issue PROJ-2');
+      expect(body.properties.subject).toBe('Issue PROJ-2');
     });
 
-    it('uses empty string for hs_task_body when description is missing or non-ADF', async () => {
-      fetchMock.mockResolvedValueOnce(okJson({ id: 'task-1' }));
+    it('uses empty string for content when description is missing or non-ADF', async () => {
+      fetchMock.mockResolvedValueOnce(okJson({ id: 'ticket-1' }));
       const s = newHubspot();
-      await s.createTask({ key: 'PROJ-3', fields: {} });
+      await s.createTicket({ key: 'PROJ-3', fields: {} });
       const body = JSON.parse(fetchMock.mock.calls[0][1].body);
-      expect(body.properties.hs_task_body).toBe('');
+      expect(body.properties.content).toBe('');
     });
 
     it('handles missing reporter/assignee gracefully', async () => {
-      fetchMock.mockResolvedValueOnce(okJson({ id: 'task-1' }));
+      fetchMock.mockResolvedValueOnce(okJson({ id: 'ticket-1' }));
       const s = newHubspot();
-      await s.createTask({ key: 'PROJ-4', fields: { summary: 's' } });
+      await s.createTicket({ key: 'PROJ-4', fields: { summary: 's' } });
       const body = JSON.parse(fetchMock.mock.calls[0][1].body);
       expect(body.properties.jira_reporter).toBe('');
       expect(body.properties.jira_assignee).toBe('');
@@ -141,36 +144,36 @@ describe('HubSpotService', () => {
     it('throws on non-ok response', async () => {
       fetchMock.mockResolvedValueOnce(errJson(400, 'invalid'));
       const s = newHubspot();
-      await expect(s.createTask(sampleIssue())).rejects.toThrow(/HubSpot 400/);
+      await expect(s.createTicket(sampleIssue())).rejects.toThrow(/HubSpot 400/);
     });
   });
 
-  describe('getTask', () => {
-    it('GETs the task with requested properties and returns properties', async () => {
-      fetchMock.mockResolvedValueOnce(okJson({ id: 'task-1', properties: { jira_issue_key: 'PROJ-1', jira_listo_sent: 'true' } }));
+  describe('getTicket', () => {
+    it('GETs the ticket with requested properties and returns properties', async () => {
+      fetchMock.mockResolvedValueOnce(okJson({ id: 'ticket-1', properties: { jira_issue_key: 'PROJ-1', jira_listo_sent: 'true' } }));
       const s = newHubspot();
-      const props = await s.getTask('task-1', ['jira_issue_key', 'jira_listo_sent']);
+      const props = await s.getTicket('ticket-1', ['jira_issue_key', 'jira_listo_sent']);
       expect(props).toEqual({ jira_issue_key: 'PROJ-1', jira_listo_sent: 'true' });
       const [url, opts] = fetchMock.mock.calls[0];
-      expect(url).toBe('https://api.hubapi.com/crm/v3/objects/tasks/task-1?properties=jira_issue_key%2Cjira_listo_sent');
+      expect(url).toBe('https://api.hubapi.com/crm/v3/objects/tickets/ticket-1?properties=jira_issue_key%2Cjira_listo_sent');
       expect(opts.method).toBe('GET');
     });
 
     it('returns 404 as a structured error', async () => {
       fetchMock.mockResolvedValueOnce(errJson(404, 'gone'));
       const s = newHubspot();
-      await expect(s.getTask('task-gone', [])).rejects.toThrow(/HubSpot 404/);
+      await expect(s.getTicket('ticket-gone', [])).rejects.toThrow(/HubSpot 404/);
     });
   });
 
-  describe('updateTask', () => {
-    it('PATCHes the task with new properties', async () => {
-      fetchMock.mockResolvedValueOnce(okJson({ id: 'task-1', properties: { jira_listo_sent: 'true' } }));
+  describe('updateTicket', () => {
+    it('PATCHes the ticket with new properties', async () => {
+      fetchMock.mockResolvedValueOnce(okJson({ id: 'ticket-1', properties: { jira_listo_sent: 'true' } }));
       const s = newHubspot();
-      const res = await s.updateTask('task-1', { jira_listo_sent: 'true' });
-      expect(res).toEqual({ id: 'task-1', properties: { jira_listo_sent: 'true' } });
+      const res = await s.updateTicket('ticket-1', { jira_listo_sent: 'true' });
+      expect(res).toEqual({ id: 'ticket-1', properties: { jira_listo_sent: 'true' } });
       const [url, opts] = fetchMock.mock.calls[0];
-      expect(url).toBe('https://api.hubapi.com/crm/v3/objects/tasks/task-1');
+      expect(url).toBe('https://api.hubapi.com/crm/v3/objects/tickets/ticket-1');
       expect(opts.method).toBe('PATCH');
       const body = JSON.parse(opts.body);
       expect(body.properties).toEqual({ jira_listo_sent: 'true' });
@@ -179,7 +182,7 @@ describe('HubSpotService', () => {
     it('throws on non-ok response', async () => {
       fetchMock.mockResolvedValueOnce(errJson(500, 'x'));
       const s = newHubspot();
-      await expect(s.updateTask('task-1', { a: 'b' })).rejects.toThrow(/HubSpot 500/);
+      await expect(s.updateTicket('ticket-1', { a: 'b' })).rejects.toThrow(/HubSpot 500/);
     });
   });
 
@@ -188,16 +191,16 @@ describe('HubSpotService', () => {
       fetchMock
         .mockResolvedValueOnce({ ok: false, status: 503, text: async () => 'down', headers: { get: () => null } })
         .mockResolvedValueOnce(okJson({ total: 0, results: [] }));
-      const s = hubspot({ token: 'pat-na1-test', jiraBaseUrl: 'https://org.atlassian.net' }); // no withRetry override
-      const found = await s.findTaskByJiraKey('PROJ-1');
+      const s = hubspot({ token: 'pat-na1-test', jiraBaseUrl: 'https://org.atlassian.net', pipelineId: 'pipeline-1', newStageId: 'stage-new' }); // no withRetry override
+      const found = await s.findTicketByJiraKey('PROJ-1');
       expect(found).toBeNull();
       expect(fetchMock).toHaveBeenCalledTimes(2);
     });
 
     it('does not retry on 400 (default withRetry)', async () => {
       fetchMock.mockResolvedValueOnce({ ok: false, status: 400, text: async () => 'bad', headers: { get: () => null } });
-      const s = hubspot({ token: 'pat-na1-test', jiraBaseUrl: 'https://org.atlassian.net' });
-      await expect(s.findTaskByJiraKey('PROJ-1')).rejects.toThrow(/HubSpot 400/);
+      const s = hubspot({ token: 'pat-na1-test', jiraBaseUrl: 'https://org.atlassian.net', pipelineId: 'pipeline-1', newStageId: 'stage-new' });
+      await expect(s.findTicketByJiraKey('PROJ-1')).rejects.toThrow(/HubSpot 400/);
       expect(fetchMock).toHaveBeenCalledTimes(1);
     });
   });

@@ -17,8 +17,11 @@ describe('createApp', () => {
     process.env.JIRA_API_TOKEN = 'token-abc';
     process.env.JIRA_PROJECT_KEY = 'PROJ';
     process.env.HUBSPOT_TOKEN = 'pat-na1-test';
-    process.env.WEBHOOK_SECRET = 'whsec-test';
+    process.env.HUBSPOT_APP_SECRET = 'app-secret-test';
     process.env.MONGO_URI = 'mongodb://localhost:27017/test_server';
+    process.env.HUBSPOT_TICKET_PIPELINE_ID = 'pipeline-1';
+    process.env.HUBSPOT_TICKET_STAGE_NEW_ID = 'stage-new';
+    process.env.HUBSPOT_TICKET_STAGE_CLOSED_ID = 'stage-closed';
 
     const { MongoMemoryServer } = require('mongodb-memory-server');
     mongod = await MongoMemoryServer.create();
@@ -31,7 +34,7 @@ describe('createApp', () => {
     app = createApp({
       mongo: realMongo,
       jira: { respondToIssue: () => {} },
-      hubspot: { getTask: () => {}, updateTask: () => {} },
+      hubspot: { getTicket: () => {}, updateTicket: () => {} },
     });
   });
 
@@ -47,7 +50,7 @@ describe('createApp', () => {
     const localApp = createApp({
       mongo: fakeMongo,
       jira: { respondToIssue: () => {} },
-      hubspot: { getTask: () => {}, updateTask: () => {} },
+      hubspot: { getTicket: () => {}, updateTicket: () => {} },
     });
     const res = await request(localApp).get('/healthz');
     expect(res.status).toBe(503);
@@ -80,9 +83,9 @@ describe('routes/webhooks module', () => {
   it('exports a factory that produces a router with a POST / handler', () => {
     const factory = require('../src/routes/webhooks');
     const router = factory({
-      secret: 's',
+      appSecret: 's',
       jira: { respondToIssue: () => {} },
-      hubspot: { getTask: () => {}, updateTask: () => {} },
+      hubspot: { getTicket: () => {}, updateTicket: () => {} },
     });
     const stack = router.stack || [];
     const hasPost = stack.some(
@@ -91,18 +94,13 @@ describe('routes/webhooks module', () => {
     expect(hasPost).toBe(true);
   });
 
-  it('throws when secret is missing', () => {
-    const factory = require('../src/routes/webhooks');
-    expect(() => factory({ jira: {}, hubspot: {} })).toThrow(/secret/);
-  });
-
   it('throws when jira is missing', () => {
     const factory = require('../src/routes/webhooks');
-    expect(() => factory({ secret: 's', hubspot: {} })).toThrow(/jira/);
+    expect(() => factory({ appSecret: 's', hubspot: {} })).toThrow(/jira/);
   });
 
   it('throws when hubspot is missing', () => {
     const factory = require('../src/routes/webhooks');
-    expect(() => factory({ secret: 's', jira: {} })).toThrow(/hubspot/);
+    expect(() => factory({ appSecret: 's', jira: {} })).toThrow(/hubspot/);
   });
 });

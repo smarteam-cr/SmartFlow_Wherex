@@ -1,7 +1,7 @@
 {
   "name": "smartflow-hubspot-jira",
   "version": "1.0.0",
-  "description": "Integracion JIRA <-> HubSpot: ingesta periodica de issues a tasks y callback de finalizacion",
+  "description": "Integracion JIRA <-> HubSpot: ingesta periodica de issues a tickets y callback de finalizacion",
   "main": "src/server.js",
   "type": "commonjs",
   "scripts": {
@@ -11,6 +11,7 @@
     "test:coverage": "vitest run --coverage",
     "run-once": "node bin/run-once.js",
     "list-jira-transitions": "node bin/list-jira-transitions.js",
+    "list-hubspot-ticket-stages": "node bin/list-hubspot-ticket-stages.js",
     "setup-hubspot": "node scripts/setup-hubspot-properties.js"
   },
   "dependencies": {

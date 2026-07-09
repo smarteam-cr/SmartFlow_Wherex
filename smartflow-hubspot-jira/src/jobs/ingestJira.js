@@ -5,8 +5,8 @@ function toIsoNormalized(isoOrDate) {
   return d.toISOString();
 }
 
-function jqlForProject(project, lowerBoundIso) {
-  return `project = ${project} AND updated >= "${lowerBoundIso}" ORDER BY updated ASC`;
+function jqlForProject(project, minutesAgo) {
+  return `project = ${project} AND updated >= "-${minutesAgo}m" ORDER BY updated ASC`;
 }
 
 function createIngestJob({
@@ -46,8 +46,10 @@ function createIngestJob({
     let maxUpdated = null;
     let anySucceeded = false;
 
+    const minutesAgo = Math.max(1, Math.ceil((now.getTime() - new Date(lowerBoundIso).getTime()) / 60000));
+
     for (const project of projects) {
-      const jql = jqlForProject(project, lowerBoundIso);
+      const jql = jqlForProject(project, minutesAgo);
       let issues;
       try {
         issues = await jira.searchIssues({ jql, fields: ['summary', 'description', 'reporter', 'assignee', 'updated', 'status', 'project', 'issuetype'] });
@@ -74,18 +76,18 @@ function createIngestJob({
         }
 
         try {
-          const existing = await hubspot.findTaskByJiraKey(iss.key);
+          const existing = await hubspot.findTicketByJiraKey(iss.key);
           if (existing) {
             result.skipped += 1;
             continue;
           }
-          const created = await hubspot.createTask(iss);
+          const created = await hubspot.createTicket(iss);
           try {
             await mongo.markProcessed(project, iss.key, created.id);
           } catch (dupErr) {
             // Race against a parallel run: another ingest already inserted this issue.
-            // Count it as skipped and continue; the duplicate task is harmless because of
-            // findTaskByJiraKey on subsequent runs.
+            // Count it as skipped and continue; the duplicate ticket is harmless because of
+            // findTicketByJiraKey on subsequent runs.
             result.skipped += 1;
             result.errors.push({ project, issueKey: iss.key, error: `dedup race: ${dupErr.message}` });
             continue;

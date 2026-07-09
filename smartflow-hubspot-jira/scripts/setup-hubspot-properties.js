@@ -19,20 +19,20 @@ const PROPERTIES = [
   },
 ];
 
-async function diagnoseTasks() {
+async function diagnoseTickets() {
   const token = process.env.HUBSPOT_TOKEN;
   if (!token) {
     console.log('HUBSPOT_TOKEN no esta en .env');
     return false;
   }
 
-  console.log('\n--- Diagnostico: que scope necesita Tasks? ---');
-  const res = await fetch('https://api.hubapi.com/crm/v3/objects/tasks?limit=1', {
+  console.log('\n--- Diagnostico: que scope necesita Tickets? ---');
+  const res = await fetch('https://api.hubapi.com/crm/v3/objects/tickets?limit=1', {
     headers: { Authorization: `Bearer ${token}` },
   });
   const body = await res.text();
   if (res.ok) {
-    console.log('OK: el token tiene acceso a Tasks (status ' + res.status + ')');
+    console.log('OK: el token tiene acceso a Tickets (status ' + res.status + ')');
     return true;
   }
   console.log('Status: ' + res.status);
@@ -46,26 +46,28 @@ async function diagnoseTasks() {
     } catch (_) {}
   }
   if (res.status === 403) {
-    console.log('  El token existe pero le falta el scope para Tasks.');
-    console.log('  En HubSpot: Development -> Legacy apps -> tu app -> Scopes');
-    console.log('  Click "Add new scope" y en "Find a scope" busca:');
-    console.log('    - "tasks"');
-    console.log('    - "crm.objects.tasks"');
-    console.log('    - "engagement"');
-    console.log('    - "activity"');
-    console.log('  Si nada aparece, intenta con el alcance mas amplio "crm" o "crm.import".');
+    console.log('  El token existe pero le falta el scope para Tickets.');
+    console.log('  En HubSpot: Settings -> Integrations -> Private Apps -> tu app -> Scopes');
+    console.log('  Click "Add new scope" y en "Find a scope" busca "tickets".');
   }
   return false;
 }
 
+function missingScopesFromError(body) {
+  if (!body || !body.errors || !body.errors[0]) return null;
+  const ctx = body.errors[0].context || {};
+  const scopes = ctx.requiredGranularScopes || [];
+  return scopes.length ? scopes : null;
+}
+
 async function createProperty(prop) {
-  const res = await fetch('https://api.hubapi.com/crm/v3/properties/tasks', {
+  const res = await fetch('https://api.hubapi.com/crm/v3/properties/tickets', {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${process.env.HUBSPOT_TOKEN}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ ...prop, groupName: 'taskinformation' }),
+    body: JSON.stringify({ ...prop, groupName: 'ticketinformation' }),
   });
 
   if (res.status === 409) {
@@ -83,14 +85,6 @@ async function createProperty(prop) {
   return 'created';
 }
 
-function isTasksSchemaWriteUnsupported(body) {
-  if (!body || !body.errors || !body.errors[0]) return false;
-  const ctx = body.errors[0].context || {};
-  const scopes = ctx.requiredGranularScopes || [];
-  if (scopes.length === 0) return false;
-  return !scopes.some((s) => s.includes('tasks'));
-}
-
 async function setupProperties() {
   let firstError = null;
   for (const prop of PROPERTIES) {
@@ -104,13 +98,12 @@ async function setupProperties() {
   if (firstError && firstError.responseStatus === 403) {
     let parsed = null;
     try { parsed = JSON.parse(firstError.responseText); } catch (_) {}
-    if (parsed && isTasksSchemaWriteUnsupported(parsed)) {
-      console.log('\nHubSpot no expone un scope "tasks schema write" en su UI actual.');
-      console.log('Las propiedades del objeto Tasks se tienen que crear por la UI:');
-      console.log('  HubSpot -> Settings -> Properties -> Tasks -> Create property');
-      console.log('  (la lista exacta de las 7 propiedades esta en el README).');
-      console.log('\nSi ya las creaste a mano, ignora este error: el script se detiene');
-      console.log('al primer fallo pero las propiedades que ya existian fueron marcadas como skip.');
+    const scopes = missingScopesFromError(parsed);
+    if (scopes) {
+      console.log('\nAl token le falta uno de estos scopes en la app privada:');
+      scopes.forEach((s) => console.log('  - ' + s));
+      console.log('\nAgrega el scope en HubSpot -> Settings -> Integrations -> Private Apps -> tu app -> Scopes');
+      console.log('y vuelve a correr: node scripts/setup-hubspot-properties.js');
       process.exit(2);
     }
   }
@@ -118,15 +111,15 @@ async function setupProperties() {
 }
 
 async function main() {
-  const ok = await diagnoseTasks();
+  const ok = await diagnoseTickets();
   if (!ok) {
     console.log('\nArregla el scope del token y vuelve a correr:');
     console.log('  node scripts/setup-hubspot-properties.js');
     process.exit(1);
   }
-  console.log('\n--- Creando propiedades custom en Task ---');
+  console.log('\n--- Creando propiedades custom en Ticket ---');
   await setupProperties();
-  console.log('\nListo. Verifica en HubSpot: Settings -> Properties -> Tasks.');
+  console.log('\nListo. Verifica en HubSpot: Settings -> Properties -> Tickets.');
 }
 
 if (require.main === module) {
@@ -136,4 +129,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { PROPERTIES, createProperty, diagnoseTasks, setupProperties };
+module.exports = { PROPERTIES, createProperty, diagnoseTickets, setupProperties };

@@ -1,3 +1,4 @@
+require('dotenv').config();
 const express = require('express');
 const config = require('./config');
 const mongo = require('./db/mongo');
@@ -8,20 +9,28 @@ const { startScheduler, stopScheduler } = require('./scheduler');
 const createHealthRouter = require('./routes/health');
 const createWebhooksRouter = require('./routes/webhooks');
 
-function createApp({ mongo: mongoClient = mongo, jira, hubspot, transitionDoneId } = {}) {
+function createApp({ mongo: mongoClient = mongo, jira, hubspot, transitionDoneId, closedStageId } = {}) {
   const app = express();
   app.set('trust proxy', true);
 
-  app.use(express.json({ limit: '1mb' }));
+  app.use(
+    express.json({
+      limit: '1mb',
+      verify: (req, res, buf) => {
+        req.rawBody = buf;
+      },
+    })
+  );
 
   app.use(createHealthRouter({ mongo: mongoClient }));
   app.use(
     '/webhooks/hubspot',
     createWebhooksRouter({
-      secret: config.WEBHOOK_SECRET,
+      appSecret: config.HUBSPOT_APP_SECRET,
       jira,
       hubspot,
       transitionDoneId,
+      closedStageId,
     })
   );
 
@@ -39,6 +48,8 @@ async function start() {
   const hubspot = createHubSpotService({
     token: config.HUBSPOT_TOKEN,
     jiraBaseUrl: config.JIRA_BASE_URL,
+    pipelineId: config.HUBSPOT_TICKET_PIPELINE_ID,
+    newStageId: config.HUBSPOT_TICKET_STAGE_NEW_ID,
   });
   const ingest = createIngestJob({
     jira,
@@ -49,7 +60,12 @@ async function start() {
   });
   startScheduler({ ingest, intervalMin: config.POLL_INTERVAL_MIN });
 
-  const app = createApp({ jira, hubspot, transitionDoneId: config.JIRA_TRANSITION_DONE_ID });
+  const app = createApp({
+    jira,
+    hubspot,
+    transitionDoneId: config.JIRA_TRANSITION_DONE_ID,
+    closedStageId: config.HUBSPOT_TICKET_STAGE_CLOSED_ID,
+  });
   const server = app.listen(config.PORT, () => {
     console.log(`Listening on port ${config.PORT}`);
   });

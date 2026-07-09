@@ -9,6 +9,8 @@ const jira = require('../src/services/jira')({
 const hubspot = require('../src/services/hubspot')({
   token: process.env.HUBSPOT_TOKEN,
   jiraBaseUrl: process.env.JIRA_BASE_URL,
+  pipelineId: process.env.HUBSPOT_TICKET_PIPELINE_ID,
+  newStageId: process.env.HUBSPOT_TICKET_STAGE_NEW_ID,
 });
 const mongo = require('../src/db/mongo');
 const createIngestJob = require('../src/jobs/ingestJira');

@@ -30,9 +30,12 @@ describe('smoke: npm start end-to-end', () => {
     process.env.JIRA_API_TOKEN = 'token-abc';
     process.env.JIRA_PROJECT_KEY = 'PROJ';
     process.env.HUBSPOT_TOKEN = 'pat-na1-test';
-    process.env.WEBHOOK_SECRET = 'whsec-smoke';
+    process.env.HUBSPOT_APP_SECRET = 'app-secret-smoke';
     process.env.MONGO_URI = memUri;
     process.env.PORT = '0'; // OS-assigned
+    process.env.HUBSPOT_TICKET_PIPELINE_ID = 'pipeline-1';
+    process.env.HUBSPOT_TICKET_STAGE_NEW_ID = 'stage-new';
+    process.env.HUBSPOT_TICKET_STAGE_CLOSED_ID = 'stage-closed';
 
     // Silence the cron and node-cron
     const cron = require('node-cron');
@@ -63,10 +66,10 @@ describe('smoke: npm start end-to-end', () => {
     expect(JSON.parse(res.body)).toEqual({ ok: true, mongo: 'up' });
   });
 
-  it('rejects unauthenticated POST /webhooks/hubspot with 401', async () => {
+  it('rejects unsigned POST /webhooks/hubspot with 401', async () => {
     const port = serverHandle.address().port;
     const res = await new Promise((resolve, reject) => {
-      const data = JSON.stringify({ objectId: 'task-1' });
+      const data = JSON.stringify([{ objectId: 'ticket-1', subscriptionType: 'ticket.propertyChange', propertyName: 'hs_pipeline_stage', propertyValue: 'stage-closed' }]);
       const req = http.request(
         {
           port,
