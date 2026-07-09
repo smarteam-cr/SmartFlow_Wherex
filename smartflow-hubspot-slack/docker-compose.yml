@@ -5,6 +5,5 @@ services:
       - "3006:3006"
     env_file:
       - .env
-    environment:
-      MONGO_URI: mongodb://mongo:27017/slack_hubspot
+    restart: unless-stopped
 

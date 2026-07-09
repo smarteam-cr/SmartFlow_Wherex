@@ -319,8 +319,8 @@ POLL_INTERVAL_MIN=5
 PORT=3000
 WEBHOOK_SECRET=cadena-larga-secreta
 
-# Mongo
-MONGO_URI=mongodb://localhost:27017/jira_hubspot
+# Mongo (compartida con smartflow-hubspot-slack: base WherEXdb)
+MONGO_URI=mongodb://localhost:27017/WherEXdb
 ```
 
 **Permisos de JIRA (cuenta Atlassian):** la cuenta asociada al API Token debe tener:
