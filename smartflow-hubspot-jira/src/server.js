@@ -12,13 +12,20 @@ function createApp({ mongo: mongoClient = mongo, jira, hubspot, transitionDoneId
   const app = express();
   app.set('trust proxy', true);
 
-  app.use(express.json({ limit: '1mb' }));
+  app.use(
+    express.json({
+      limit: '1mb',
+      verify: (req, res, buf) => {
+        req.rawBody = buf;
+      },
+    })
+  );
 
   app.use(createHealthRouter({ mongo: mongoClient }));
   app.use(
     '/webhooks/hubspot',
     createWebhooksRouter({
-      secret: config.WEBHOOK_SECRET,
+      appSecret: config.HUBSPOT_APP_SECRET,
       jira,
       hubspot,
       transitionDoneId,

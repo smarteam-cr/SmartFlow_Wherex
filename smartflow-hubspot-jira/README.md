@@ -43,12 +43,12 @@ Copia `.env.example` a `.env` y completa los valores.
 | `JIRA_PROJECT_KEY` | si | — | Uno o varios proyectos separados por coma (ej. `PROJ,AUX`) |
 | `JIRA_TRANSITION_DONE_ID` | no | — | ID de la transicion a "Done" para el Flujo B. Si esta vacio, el Flujo B solo agrega comentario |
 | `HUBSPOT_TOKEN` | si | — | Token de la app privada de HubSpot (scope `tickets`) |
+| `HUBSPOT_APP_SECRET` | si | — | Client secret de la app privada (pestaña Auth → "Show secret"), usado para verificar la firma HMAC del webhook |
 | `HUBSPOT_TICKET_PIPELINE_ID` | si | — | Pipeline de Tickets donde se crean los registros (`npm run list-hubspot-ticket-stages`) |
 | `HUBSPOT_TICKET_STAGE_NEW_ID` | si | — | Etapa inicial al crear un ticket |
 | `HUBSPOT_TICKET_STAGE_CLOSED_ID` | si | — | Etapa que dispara el Flujo B (callback a JIRA) |
 | `POLL_INTERVAL_MIN` | no | 5 | Minutos entre corridas de ingesta (1–59) |
 | `PORT` | no | 3000 | Puerto HTTP |
-| `WEBHOOK_SECRET` | si | — | Token compartido que el workflow de HubSpot envia en `X-Webhook-Token` |
 | `MONGO_URI` | si | — | URI de MongoDB (ej. `mongodb://localhost:27017/jira_hubspot`) |
 
 ## Permisos requeridos
@@ -136,21 +136,21 @@ docker compose up -d
 
 `Dockerfile` incluye un `HEALTHCHECK` contra `GET /healthz` que Docker respeta para reportar el estado del contenedor.
 
-## Configurar el workflow en HubSpot
+## Configurar el webhook en HubSpot
 
-Para que el callback se dispare al cerrar un ticket:
+El Flujo B usa la suscripción nativa de Webhooks de la app privada (no un Workflow custom): HubSpot firma cada request con HMAC usando el Client secret de la app, así que no hay ningún token que compartir manualmente.
 
-1. En HubSpot, **Automation → Workflows**.
-2. Crea un workflow basado en **Tickets**.
-3. Trigger: `Ticket property → hs_pipeline_stage is any of <HUBSPOT_TICKET_STAGE_CLOSED_ID>`.
-4. Accion: **Send a webhook (POST)** a `https://TU-DOMINIO/webhooks/hubspot` con:
-   - Header `X-Webhook-Token: <valor de WEBHOOK_SECRET>`.
-   - Body: `{ "objectId": "{{ticket.id}}" }`.
+1. En HubSpot, ve a tu app privada: **Development → Legacy apps → tu app**.
+2. Pestaña **Webhooks** → "Edit webhooks" → Target URL = `https://TU-DOMINIO/webhooks/hubspot`.
+3. "Create subscription" → objeto **Tickets**, evento **Property changed**, propiedad `hs_pipeline_stage` → Subscribe → Commit changes.
+4. Copia el Client secret desde la pestaña **Auth** ("Show secret") a `HUBSPOT_APP_SECRET` en `.env`.
+
+En local, expón tu servidor con `ngrok http 3000` y usa la URL que te da ngrok como Target URL. En producción, un reverse proxy (nginx) hacia el puerto de la app sirve igual — mismo patrón que `../smartflow-hubspot-slack`.
 
 ## Endpoints
 
 - `GET /healthz` — healthcheck. 200 `{ok:true,mongo:"up"}` o 503 `{ok:false,mongo:"down"}`.
-- `POST /webhooks/hubspot` — callback de HubSpot. Auth via header `X-Webhook-Token`.
+- `POST /webhooks/hubspot` — suscripción de webhooks de HubSpot (`ticket.propertyChange`). Requiere firma válida (`x-hubspot-signature` o `x-hubspot-signature-v3`) y body como array de eventos.
 
 ## Estructura del proyecto
 
@@ -179,5 +179,5 @@ src/
 MVP completo. 4 hitos cerrados:
 - Hito 1 — bootstrap, Mongo, healthcheck
 - Hito 2 — Flujo A (JiraService, ADF, HubSpotService, ingest job, scheduler)
-- Hito 3 — Flujo B (webhook con token auth e idempotencia, retry helper)
+- Hito 3 — Flujo B (webhook con firma HMAC e idempotencia, retry helper)
 - Hito 4 — E2E integration + deploy artifacts

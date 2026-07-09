@@ -1,92 +1,96 @@
 const express = require('express');
+const crypto = require('crypto');
 
-const DEFAULT_HEADER = 'x-webhook-token';
+const SIGNATURE_MAX_AGE_MS = 5 * 60 * 1000;
 
-function extractTicketId(body) {
-  if (!body || typeof body !== 'object') return null;
-  if (body.objectId) return String(body.objectId);
-  if (body.ticketId) return String(body.ticketId);
-  if (body.properties && body.properties.hs_object_id) {
-    return String(body.properties.hs_object_id);
+function isValidSignature({ appSecret, method, url, rawBody, timestamp, signatureV3, signatureV1 }) {
+  if (signatureV3 && timestamp) {
+    if (Math.abs(Date.now() - Number(timestamp)) > SIGNATURE_MAX_AGE_MS) return false;
+    const expected = crypto
+      .createHmac('sha256', appSecret)
+      .update(method + url + rawBody + timestamp)
+      .digest('base64');
+    const expectedBuf = Buffer.from(expected);
+    const actualBuf = Buffer.from(signatureV3);
+    return expectedBuf.length === actualBuf.length && crypto.timingSafeEqual(expectedBuf, actualBuf);
   }
-  return null;
+  if (signatureV1) {
+    const expected = crypto.createHash('sha256').update(appSecret + rawBody).digest('hex');
+    const expectedBuf = Buffer.from(expected);
+    const actualBuf = Buffer.from(signatureV1);
+    return expectedBuf.length === actualBuf.length && crypto.timingSafeEqual(expectedBuf, actualBuf);
+  }
+  return false;
 }
 
-function createWebhooksRouter({
-  secret,
-  headerName = DEFAULT_HEADER,
-  jira,
-  hubspot,
-  transitionDoneId,
-  closedStageId,
-} = {}) {
-  if (!secret) throw new Error('createWebhooksRouter: secret is required');
+function createWebhooksRouter({ appSecret, closedStageId, jira, hubspot, transitionDoneId } = {}) {
   if (!jira) throw new Error('createWebhooksRouter: jira is required');
   if (!hubspot) throw new Error('createWebhooksRouter: hubspot is required');
 
   const router = express.Router();
 
   router.post('/', async (req, res) => {
-    const provided = req.headers[headerName.toLowerCase()];
-    if (!provided || provided !== secret) {
-      return res.status(401).json({ error: 'unauthorized' });
-    }
-
-    const ticketId = extractTicketId(req.body);
-    if (!ticketId) {
-      return res.status(400).json({ error: 'ticketId missing from payload' });
-    }
-
-    let ticketProps;
     try {
-      ticketProps = await hubspot.getTicket(ticketId, [
-        'jira_issue_key',
-        'jira_comment_id',
-        'jira_listo_sent',
-        'hs_pipeline_stage',
-      ]);
-    } catch (err) {
-      if (err && err.status === 404) {
-        return res.status(200).json({ ok: true, skipped: 'gone' });
+      const proto = req.get('x-forwarded-proto') || req.protocol;
+      const host = req.get('x-forwarded-host') || req.get('host');
+      const url = `${proto}://${host}${req.originalUrl}`;
+      const rawBody = req.rawBody ? req.rawBody.toString('utf8') : '';
+
+      const valid = isValidSignature({
+        appSecret,
+        method: req.method,
+        url,
+        rawBody,
+        timestamp: req.get('x-hubspot-request-timestamp'),
+        signatureV3: req.get('x-hubspot-signature-v3'),
+        signatureV1: req.get('x-hubspot-signature'),
+      });
+
+      if (!valid) {
+        return res.status(401).json({ error: 'invalid signature' });
       }
-      // Other HubSpot errors: let HubSpot retry
-      console.error('webhook getTicket failed:', err);
-      return res.status(500).json({ error: 'upstream lookup failed' });
-    }
 
-    if (ticketProps.hs_pipeline_stage !== closedStageId) {
-      return res.status(200).json({ ok: true, skipped: 'not_done' });
-    }
+      const events = Array.isArray(req.body) ? req.body : [req.body];
 
-    if (ticketProps.jira_listo_sent === 'true') {
-      return res.status(200).json({ ok: true, skipped: 'duplicate' });
-    }
+      for (const event of events) {
+        if (event.subscriptionType !== 'ticket.propertyChange') continue;
+        if (event.propertyName !== 'hs_pipeline_stage') continue;
+        if (String(event.propertyValue) !== String(closedStageId)) continue;
 
-    if (!ticketProps.jira_issue_key) {
-      return res.status(200).json({ ok: true, skipped: 'no_key' });
-    }
+        const ticketId = event.objectId;
+        let ticketProps;
+        try {
+          ticketProps = await hubspot.getTicket(ticketId, [
+            'jira_issue_key',
+            'jira_comment_id',
+            'jira_listo_sent',
+          ]);
+        } catch (err) {
+          if (err && err.status === 404) {
+            console.warn(`ticket ${ticketId}: not found (404), skipping`);
+            continue;
+          }
+          throw err;
+        }
 
-    let commentId;
-    try {
-      commentId = await jira.respondToIssue(ticketProps.jira_issue_key, {
-        transitionDoneId,
-      });
+        if (ticketProps.jira_listo_sent === 'true') continue;
+        if (!ticketProps.jira_issue_key) continue;
+
+        const commentId = await jira.respondToIssue(ticketProps.jira_issue_key, {
+          transitionDoneId,
+        });
+
+        await hubspot.updateTicket(ticketId, {
+          jira_comment_id: commentId,
+          jira_listo_sent: 'true',
+        });
+      }
+
+      res.status(200).json({ ok: true });
     } catch (err) {
-      console.error('webhook respondToIssue failed:', err);
-      return res.status(500).json({ error: 'jira write failed' });
+      console.error('webhook handler error:', err);
+      res.status(500).json({ error: 'internal error' });
     }
-
-    try {
-      await hubspot.updateTicket(ticketId, {
-        jira_comment_id: commentId,
-        jira_listo_sent: 'true',
-      });
-    } catch (err) {
-      console.error('webhook updateTicket failed:', err);
-      return res.status(500).json({ error: 'ticket update failed' });
-    }
-
-    return res.status(200).json({ ok: true, commentId });
   });
 
   return router;
@@ -94,4 +98,4 @@ function createWebhooksRouter({
 
 module.exports = createWebhooksRouter;
 module.exports.createWebhooksRouter = createWebhooksRouter;
-module.exports.extractTicketId = extractTicketId;
+module.exports.isValidSignature = isValidSignature;

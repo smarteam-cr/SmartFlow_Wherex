@@ -12,7 +12,7 @@ const REQUIRED = {
   HUBSPOT_TICKET_PIPELINE_ID: 'pipeline-1',
   HUBSPOT_TICKET_STAGE_NEW_ID: 'stage-new',
   HUBSPOT_TICKET_STAGE_CLOSED_ID: 'stage-closed',
-  WEBHOOK_SECRET: 'whsec-test',
+  HUBSPOT_APP_SECRET: 'app-secret-test',
   MONGO_URI: 'mongodb://localhost:27017/test',
 };
 
@@ -59,7 +59,7 @@ describe('config', () => {
     expect(config.JIRA_API_TOKEN).toBe('token-abc');
     expect(config.JIRA_PROJECT_KEYS).toEqual(['PROJ']);
     expect(config.HUBSPOT_TOKEN).toBe('pat-na1-test');
-    expect(config.WEBHOOK_SECRET).toBe('whsec-test');
+    expect(config.HUBSPOT_APP_SECRET).toBe('app-secret-test');
     expect(config.MONGO_URI).toBe('mongodb://localhost:27017/test');
   });
 
@@ -127,11 +127,11 @@ describe('config', () => {
     expect(() => require('../src/config')).toThrow(/HUBSPOT_TICKET_STAGE_CLOSED_ID/);
   });
 
-  it('throws when WEBHOOK_SECRET is missing', () => {
+  it('throws when HUBSPOT_APP_SECRET is missing', () => {
     clearEnv();
-    setEnv({ WEBHOOK_SECRET: undefined });
+    setEnv({ HUBSPOT_APP_SECRET: undefined });
     resetConfigModule();
-    expect(() => require('../src/config')).toThrow(/WEBHOOK_SECRET/);
+    expect(() => require('../src/config')).toThrow(/HUBSPOT_APP_SECRET/);
   });
 
   it('throws when MONGO_URI is missing', () => {

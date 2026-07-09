@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import { MongoMemoryServer } from 'mongodb-memory-server';
+import crypto from 'node:crypto';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 
@@ -17,7 +18,7 @@ let hubspot;
 let ingest;
 let app;
 
-const SECRET = 'whsec-e2e-secret';
+const APP_SECRET = 'test-app-secret-e2e';
 const PIPELINE_ID = 'pipeline-1';
 const NEW_STAGE_ID = 'stage-new';
 const CLOSED_STAGE_ID = 'stage-closed';
@@ -31,6 +32,31 @@ function errJson(status, body = '') {
 
 const noRetry = (fn) => fn();
 
+function signV1(body) {
+  return crypto.createHash('sha256').update(APP_SECRET + body).digest('hex');
+}
+
+function ticketClosedEvent(objectId = 'ticket-1', overrides = {}) {
+  return [
+    {
+      objectId,
+      subscriptionType: 'ticket.propertyChange',
+      propertyName: 'hs_pipeline_stage',
+      propertyValue: CLOSED_STAGE_ID,
+      ...overrides,
+    },
+  ];
+}
+
+function postWebhook(events) {
+  const body = JSON.stringify(events);
+  return request(app)
+    .post('/webhooks/hubspot')
+    .set('Content-Type', 'application/json')
+    .set('x-hubspot-signature', signV1(body))
+    .send(body);
+}
+
 beforeAll(async () => {
   mongod = await MongoMemoryServer.create();
   process.env.JIRA_BASE_URL = 'https://org.atlassian.net';
@@ -38,7 +64,7 @@ beforeAll(async () => {
   process.env.JIRA_API_TOKEN = 'token-abc';
   process.env.JIRA_PROJECT_KEY = 'PROJ';
   process.env.HUBSPOT_TOKEN = 'pat-na1-test';
-  process.env.WEBHOOK_SECRET = SECRET;
+  process.env.HUBSPOT_APP_SECRET = APP_SECRET;
   process.env.MONGO_URI = 'mongodb://localhost:27017/test_e2e';
   process.env.HUBSPOT_TICKET_PIPELINE_ID = PIPELINE_ID;
   process.env.HUBSPOT_TICKET_STAGE_NEW_ID = NEW_STAGE_ID;
@@ -115,35 +141,32 @@ describe('e2e: Flujo A (ingesta) y Flujo B (callback)', () => {
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
-  it('webhook con ticket en la etapa cerrada responde 200 ok y hace respondToIssue + updateTicket', async () => {
+  it('webhook con ticket movido a la etapa cerrada responde 200 y hace respondToIssue + updateTicket', async () => {
     fetchMock
-      .mockResolvedValueOnce(okJson({ properties: { jira_issue_key: 'PROJ-1', jira_listo_sent: 'false', hs_pipeline_stage: CLOSED_STAGE_ID } }))
+      .mockResolvedValueOnce(okJson({ properties: { jira_issue_key: 'PROJ-1', jira_listo_sent: 'false' } }))
       .mockResolvedValueOnce(okJson({ id: 'comment-99' }))
       .mockResolvedValueOnce(okJson({}))
-      .mockResolvedValueOnce(okJson({ id: 'ticket-1' }));
-    const res = await request(app)
-      .post('/webhooks/hubspot')
-      .set('x-webhook-token', SECRET)
-      .send({ objectId: 'ticket-1' });
+      .mockResolvedValueOnce(okJson({}));
+    const res = await postWebhook(ticketClosedEvent());
     expect(res.status).toBe(200);
-    expect(res.body.ok).toBe(true);
+    expect(res.body).toEqual({ ok: true });
     expect(fetchMock).toHaveBeenCalledTimes(4);
   });
 
-  it('segundo webhook con el mismo ticket: skipped duplicate sin calls extra a JIRA', async () => {
+  it('segundo webhook con el mismo ticket: no repite calls a JIRA', async () => {
     fetchMock
-      .mockResolvedValueOnce(okJson({ properties: { jira_issue_key: 'PROJ-1', jira_listo_sent: 'false', hs_pipeline_stage: CLOSED_STAGE_ID } }))
+      .mockResolvedValueOnce(okJson({ properties: { jira_issue_key: 'PROJ-1', jira_listo_sent: 'false' } }))
       .mockResolvedValueOnce(okJson({ id: 'comment-99' }))
       .mockResolvedValueOnce(okJson({}))
-      .mockResolvedValueOnce(okJson({ id: 'ticket-1' }));
-    await request(app).post('/webhooks/hubspot').set('x-webhook-token', SECRET).send({ objectId: 'ticket-1' });
+      .mockResolvedValueOnce(okJson({}));
+    await postWebhook(ticketClosedEvent());
     const callsAfterFirst = fetchMock.mock.calls.length;
 
     // 2nd webhook: only getTicket call (returns jira_listo_sent=true)
-    fetchMock.mockResolvedValueOnce(okJson({ properties: { jira_issue_key: 'PROJ-1', jira_listo_sent: 'true', hs_pipeline_stage: CLOSED_STAGE_ID } }));
-    const res2 = await request(app).post('/webhooks/hubspot').set('x-webhook-token', SECRET).send({ objectId: 'ticket-1' });
+    fetchMock.mockResolvedValueOnce(okJson({ properties: { jira_issue_key: 'PROJ-1', jira_listo_sent: 'true' } }));
+    const res2 = await postWebhook(ticketClosedEvent());
     expect(res2.status).toBe(200);
-    expect(res2.body).toEqual({ ok: true, skipped: 'duplicate' });
+    expect(res2.body).toEqual({ ok: true });
     expect(fetchMock.mock.calls.length - callsAfterFirst).toBe(1);
     const [url, opts] = fetchMock.mock.calls[callsAfterFirst];
     expect(url).toContain('/crm/v3/objects/tickets/ticket-1');
@@ -179,7 +202,7 @@ describe('e2e: Flujo A (ingesta) y Flujo B (callback)', () => {
     expect(await mongo.isProcessed('PROJ', 'PROJ-1')).toBe(true);
   });
 
-  it('cross-flow completo: ingest crea ticket, webhook la marca, segundo webhook skip', async () => {
+  it('cross-flow completo: ingest crea ticket, webhook la marca, segundo webhook no repite', async () => {
     const issue = {
       key: 'PROJ-1',
       fields: {
@@ -199,21 +222,23 @@ describe('e2e: Flujo A (ingesta) y Flujo B (callback)', () => {
     expect(ingestResult.created).toBe(1);
 
     fetchMock
-      .mockResolvedValueOnce(okJson({ properties: { jira_issue_key: 'PROJ-1', jira_listo_sent: 'false', hs_pipeline_stage: CLOSED_STAGE_ID } }))
+      .mockResolvedValueOnce(okJson({ properties: { jira_issue_key: 'PROJ-1', jira_listo_sent: 'false' } }))
       .mockResolvedValueOnce(okJson({ id: 'comment-99' }))
       .mockResolvedValueOnce(okJson({}))
-      .mockResolvedValueOnce(okJson({ id: 'ticket-1' }));
-    const r1 = await request(app).post('/webhooks/hubspot').set('x-webhook-token', SECRET).send({ objectId: 'ticket-1' });
-    expect(r1.body.ok).toBe(true);
-    expect(r1.body.commentId).toBeDefined();
+      .mockResolvedValueOnce(okJson({}));
+    const r1 = await postWebhook(ticketClosedEvent());
+    expect(r1.body).toEqual({ ok: true });
 
-    fetchMock.mockResolvedValueOnce(okJson({ properties: { jira_issue_key: 'PROJ-1', jira_listo_sent: 'true', hs_pipeline_stage: CLOSED_STAGE_ID } }));
-    const r2 = await request(app).post('/webhooks/hubspot').set('x-webhook-token', SECRET).send({ objectId: 'ticket-1' });
-    expect(r2.body).toEqual({ ok: true, skipped: 'duplicate' });
+    fetchMock.mockResolvedValueOnce(okJson({ properties: { jira_issue_key: 'PROJ-1', jira_listo_sent: 'true' } }));
+    const r2 = await postWebhook(ticketClosedEvent());
+    expect(r2.body).toEqual({ ok: true });
   });
 
-  it('webhook sin token: 401, no fetch calls', async () => {
-    const res = await request(app).post('/webhooks/hubspot').send({ objectId: 'ticket-1' });
+  it('webhook sin firma: 401, no fetch calls', async () => {
+    const res = await request(app)
+      .post('/webhooks/hubspot')
+      .set('Content-Type', 'application/json')
+      .send(JSON.stringify(ticketClosedEvent()));
     expect(res.status).toBe(401);
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -241,9 +266,9 @@ describe('e2e: error paths', () => {
 
   it('JIRA falla en respondToIssue del webhook: 500 para que HubSpot reintente', async () => {
     fetchMock
-      .mockResolvedValueOnce(okJson({ properties: { jira_issue_key: 'PROJ-1', jira_listo_sent: 'false', hs_pipeline_stage: CLOSED_STAGE_ID } }))
+      .mockResolvedValueOnce(okJson({ properties: { jira_issue_key: 'PROJ-1', jira_listo_sent: 'false' } }))
       .mockResolvedValueOnce(errJson(503, 'down'));
-    const res = await request(app).post('/webhooks/hubspot').set('x-webhook-token', SECRET).send({ objectId: 'ticket-1' });
+    const res = await postWebhook(ticketClosedEvent());
     expect(res.status).toBe(500);
   });
 });
