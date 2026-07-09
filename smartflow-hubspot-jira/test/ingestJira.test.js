@@ -63,7 +63,7 @@ describe('jobs/ingestJira', () => {
     await ingest.run({ now: NOW });
     const jql = jira.searchIssues.mock.calls[0][0].jql;
     expect(jql).toContain('project = PROJ');
-    expect(jql).toContain('updated >= "2026-07-08T10:00:00.000Z"');
+    expect(jql).toContain('updated >= "-5m"');
     expect(jql).toContain('ORDER BY updated ASC');
   });
 
@@ -74,15 +74,15 @@ describe('jobs/ingestJira', () => {
     const ingest = createIngestJob({ jira, hubspot, mongo, projects: ['PROJ'], pollIntervalMin: 5 });
     await ingest.run({ now: NOW });
     const jql = jira.searchIssues.mock.calls[0][0].jql;
-    expect(jql).toContain('updated >= "2026-07-08T09:30:00.000Z"');
+    expect(jql).toContain('updated >= "-35m"');
   });
 
   it('queries each project and aggregates results', async () => {
     const jira = fakeJira({
-      'project = PROJ AND updated >= "2026-07-08T10:00:00.000Z" ORDER BY updated ASC': [
+      'project = PROJ AND updated >= "-5m" ORDER BY updated ASC': [
         issue({ key: 'PROJ-1' }),
       ],
-      'project = AUX AND updated >= "2026-07-08T10:00:00.000Z" ORDER BY updated ASC': [
+      'project = AUX AND updated >= "-5m" ORDER BY updated ASC': [
         issue({ key: 'AUX-1', project: 'AUX' }),
       ],
     });
@@ -95,7 +95,7 @@ describe('jobs/ingestJira', () => {
 
   it('skips issues that already have a HubSpot task', async () => {
     const jira = fakeJira({
-      'project = PROJ AND updated >= "2026-07-08T10:00:00.000Z" ORDER BY updated ASC': [
+      'project = PROJ AND updated >= "-5m" ORDER BY updated ASC': [
         issue({ key: 'PROJ-1' }),
         issue({ key: 'PROJ-2' }),
       ],
@@ -110,7 +110,7 @@ describe('jobs/ingestJira', () => {
 
   it('records each created issue in mongo with project, issueKey, taskId', async () => {
     const jira = fakeJira({
-      'project = PROJ AND updated >= "2026-07-08T10:00:00.000Z" ORDER BY updated ASC': [
+      'project = PROJ AND updated >= "-5m" ORDER BY updated ASC': [
         issue({ key: 'PROJ-1' }),
         issue({ key: 'PROJ-2' }),
       ],
@@ -124,7 +124,7 @@ describe('jobs/ingestJira', () => {
 
   it('advances the watermark to the max updated timestamp', async () => {
     const jira = fakeJira({
-      'project = PROJ AND updated >= "2026-07-08T10:00:00.000Z" ORDER BY updated ASC': [
+      'project = PROJ AND updated >= "-5m" ORDER BY updated ASC': [
         issue({ key: 'PROJ-1', updated: '2026-07-08T10:01:00.000+0000' }),
         issue({ key: 'PROJ-2', updated: '2026-07-08T10:03:30.000+0000' }),
       ],
@@ -157,7 +157,7 @@ describe('jobs/ingestJira', () => {
 
   it('continues processing when one issue fails (e.g. HubSpot 400)', async () => {
     const jira = fakeJira({
-      'project = PROJ AND updated >= "2026-07-08T10:00:00.000Z" ORDER BY updated ASC': [
+      'project = PROJ AND updated >= "-5m" ORDER BY updated ASC': [
         issue({ key: 'PROJ-1' }),
         issue({ key: 'PROJ-2' }),
         issue({ key: 'PROJ-3' }),
@@ -182,7 +182,7 @@ describe('jobs/ingestJira', () => {
 
   it('skips subtasks when skipSubtasks=true', async () => {
     const jira = fakeJira({
-      'project = PROJ AND updated >= "2026-07-08T10:00:00.000Z" ORDER BY updated ASC': [
+      'project = PROJ AND updated >= "-5m" ORDER BY updated ASC': [
         issue({ key: 'PROJ-1' }),
         issue({ key: 'PROJ-2', subtaskType: true }),
       ],
@@ -196,7 +196,7 @@ describe('jobs/ingestJira', () => {
 
   it('includes subtasks by default (skipSubtasks=false)', async () => {
     const jira = fakeJira({
-      'project = PROJ AND updated >= "2026-07-08T10:00:00.000Z" ORDER BY updated ASC': [
+      'project = PROJ AND updated >= "-5m" ORDER BY updated ASC': [
         issue({ key: 'PROJ-1', subtaskType: true }),
       ],
     });
@@ -208,7 +208,7 @@ describe('jobs/ingestJira', () => {
 
   it('skips issues in terminal statuses (excludeStatuses)', async () => {
     const jira = fakeJira({
-      'project = PROJ AND updated >= "2026-07-08T10:00:00.000Z" ORDER BY updated ASC': [
+      'project = PROJ AND updated >= "-5m" ORDER BY updated ASC': [
         issue({ key: 'PROJ-1' }),
         issue({ key: 'PROJ-2', status: { name: 'Done' } }),
         issue({ key: 'PROJ-3', status: { name: 'Cancelled' } }),

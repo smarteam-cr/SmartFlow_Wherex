@@ -136,6 +136,20 @@ describe('JiraService', () => {
       const s = newJira();
       await expect(s.transitionIssue('PROJ-1', '31')).rejects.toThrow(/400/);
     });
+
+    it('does not throw when JIRA responds 204 No Content (real JIRA behavior on success)', async () => {
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        status: 204,
+        json: async () => {
+          throw new Error('Unexpected end of JSON input');
+        },
+        text: async () => '',
+        headers: { get: () => null },
+      });
+      const s = newJira();
+      await expect(s.transitionIssue('PROJ-1', '31')).resolves.not.toThrow();
+    });
   });
 
   describe('respondToIssue', () => {

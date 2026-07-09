@@ -93,6 +93,7 @@ function createJiraService({ baseUrl, email, apiToken, withRetry } = {}) {
       headers: defaultHeaders,
       body: JSON.stringify({ transition: { id: String(transitionId) } }),
     });
+    if (res.status === 204) return null;
     return res.json();
   }
 

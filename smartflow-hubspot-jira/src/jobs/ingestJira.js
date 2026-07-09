@@ -5,8 +5,8 @@ function toIsoNormalized(isoOrDate) {
   return d.toISOString();
 }
 
-function jqlForProject(project, lowerBoundIso) {
-  return `project = ${project} AND updated >= "${lowerBoundIso}" ORDER BY updated ASC`;
+function jqlForProject(project, minutesAgo) {
+  return `project = ${project} AND updated >= "-${minutesAgo}m" ORDER BY updated ASC`;
 }
 
 function createIngestJob({
@@ -46,8 +46,10 @@ function createIngestJob({
     let maxUpdated = null;
     let anySucceeded = false;
 
+    const minutesAgo = Math.max(1, Math.ceil((now.getTime() - new Date(lowerBoundIso).getTime()) / 60000));
+
     for (const project of projects) {
-      const jql = jqlForProject(project, lowerBoundIso);
+      const jql = jqlForProject(project, minutesAgo);
       let issues;
       try {
         issues = await jira.searchIssues({ jql, fields: ['summary', 'description', 'reporter', 'assignee', 'updated', 'status', 'project', 'issuetype'] });
