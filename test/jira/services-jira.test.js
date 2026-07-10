@@ -95,6 +95,24 @@ describe('modules/jira/services/jira', () => {
     });
   });
 
+  describe('getIssue', () => {
+    it('GETs /rest/api/3/issue/{key}?expand=names and returns the parsed body', async () => {
+      fetchMock.mockResolvedValueOnce(okJson({ key: 'PROJ-1', fields: { summary: 'x' }, names: { summary: 'Summary' } }));
+      const s = newJira();
+      const data = await s.getIssue('PROJ-1');
+      expect(data).toEqual({ key: 'PROJ-1', fields: { summary: 'x' }, names: { summary: 'Summary' } });
+      const [url, opts] = fetchMock.mock.calls[0];
+      expect(url).toBe('https://org.atlassian.net/rest/api/3/issue/PROJ-1?expand=names');
+      expect(opts.method).toBe('GET');
+    });
+
+    it('throws on non-ok response', async () => {
+      fetchMock.mockResolvedValueOnce(errJson(404, 'not found'));
+      const s = newJira();
+      await expect(s.getIssue('PROJ-1')).rejects.toThrow(/JIRA 404/);
+    });
+  });
+
   describe('addComment', () => {
     it('POSTs ADF doc body to /rest/api/3/issue/{key}/comment', async () => {
       fetchMock.mockResolvedValueOnce(okJson({ id: 'comment-99' }));

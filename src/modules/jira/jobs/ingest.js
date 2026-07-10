@@ -1,3 +1,5 @@
+const buildIssueNote = require('../utils/issueNote');
+
 function toIsoNormalized(isoOrDate) {
   if (!isoOrDate) return null;
   const d = new Date(isoOrDate);
@@ -88,6 +90,13 @@ function createIngestJob({
             result.skipped += 1;
             result.errors.push({ project, issueKey: iss.key, error: `dedup race: ${dupErr.message}` });
             continue;
+          }
+          try {
+            const fullIssue = await jira.getIssue(iss.key);
+            const noteText = buildIssueNote(fullIssue);
+            if (noteText) await hubspot.attachNote(created.id, noteText);
+          } catch (noteErr) {
+            console.warn(`ticket ${created.id}: no se pudo adjuntar la nota con detalles de Jira:`, noteErr.message);
           }
           result.created += 1;
         } catch (err) {

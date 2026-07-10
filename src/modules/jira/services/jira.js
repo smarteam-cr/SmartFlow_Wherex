@@ -67,6 +67,11 @@ function createJiraService({ baseUrl, email, apiToken, withRetry } = {}) {
     return issues;
   }
 
+  async function getIssue(issueKey) {
+    const url = `${cleanBaseUrl}/rest/api/3/issue/${encodeURIComponent(issueKey)}?expand=names`;
+    return requestJson(url, { method: 'GET' });
+  }
+
   async function addComment(issueKey, text) {
     const url = `${cleanBaseUrl}/rest/api/3/issue/${encodeURIComponent(issueKey)}/comment`;
     const body = {
@@ -111,6 +116,7 @@ function createJiraService({ baseUrl, email, apiToken, withRetry } = {}) {
   return {
     baseUrl: cleanBaseUrl,
     searchIssues,
+    getIssue,
     addComment,
     transitionIssue,
     respondToIssue,

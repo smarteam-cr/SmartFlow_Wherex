@@ -138,12 +138,15 @@ describe('jira e2e: Flujo A (ingesta) y Flujo B (callback)', () => {
     fetchMock
       .mockResolvedValueOnce(okJson({ issues: [issue] }))
       .mockResolvedValueOnce(okJson({ total: 0, results: [] }))
-      .mockResolvedValueOnce(okJson({ id: 'ticket-1' }));
+      .mockResolvedValueOnce(okJson({ id: 'ticket-1' }))
+      .mockResolvedValueOnce(okJson(issue))
+      .mockResolvedValueOnce(okJson({ id: 'note-1' }))
+      .mockResolvedValueOnce({ ok: true, status: 204, json: async () => { throw new Error('no body'); }, text: async () => '', headers: { get: () => null } });
     const result = await ingest.run({ now: new Date('2026-07-08T10:05:00.000Z') });
     expect(result.created).toBe(1);
     expect(result.errors).toEqual([]);
     expect(await store.isProcessed('PROJ', 'PROJ-1')).toBe(true);
-    expect(fetchMock).toHaveBeenCalledTimes(3);
+    expect(fetchMock).toHaveBeenCalledTimes(6);
   });
 
   it('webhook con ticket movido a la etapa cerrada responde 200 y hace respondToIssue + updateTicket', async () => {
@@ -195,7 +198,8 @@ describe('jira e2e: Flujo A (ingesta) y Flujo B (callback)', () => {
       .mockResolvedValueOnce(okJson({ id: 'ticket-1' }))
       .mockResolvedValueOnce(okJson({ issues: [issue] }))
       .mockResolvedValueOnce(okJson({ total: 0, results: [] }))
-      .mockResolvedValueOnce(okJson({ id: 'ticket-2' }));
+      .mockResolvedValueOnce(okJson({ id: 'ticket-2' }))
+      .mockResolvedValue(okJson(issue));
 
     const [a, b] = await Promise.all([
       ingest.run({ now: new Date('2026-07-08T10:05:00.000Z') }),
@@ -221,7 +225,8 @@ describe('jira e2e: Flujo A (ingesta) y Flujo B (callback)', () => {
     fetchMock
       .mockResolvedValueOnce(okJson({ issues: [issue] }))
       .mockResolvedValueOnce(okJson({ total: 0, results: [] }))
-      .mockResolvedValueOnce(okJson({ id: 'ticket-1' }));
+      .mockResolvedValueOnce(okJson({ id: 'ticket-1' }))
+      .mockResolvedValueOnce(okJson(issue));
     const ingestResult = await ingest.run({ now: new Date('2026-07-08T10:05:00.000Z') });
     expect(ingestResult.created).toBe(1);
 

@@ -94,6 +94,17 @@ function createHubSpotService({ token, jiraBaseUrl = '', pipelineId, newStageId,
     });
   }
 
+  async function attachNote(ticketId, text) {
+    const note = await http('POST', '/crm/v3/objects/notes', {
+      body: { properties: { hs_note_body: text, hs_timestamp: Date.now() } },
+    });
+    await request(
+      `https://api.hubapi.com/crm/v4/objects/notes/${note.id}/associations/default/tickets/${ticketId}`,
+      { method: 'PUT', headers: authHeaders }
+    );
+    return note.id;
+  }
+
   async function getTicket(ticketId, properties = []) {
     const data = await http('GET', `/crm/v3/objects/tickets/${encodeURIComponent(ticketId)}`, {
       query: properties.length ? { properties: properties.join(',') } : undefined,
@@ -110,6 +121,7 @@ function createHubSpotService({ token, jiraBaseUrl = '', pipelineId, newStageId,
   return {
     findTicketByJiraKey,
     createTicket,
+    attachNote,
     getTicket,
     updateTicket,
   };

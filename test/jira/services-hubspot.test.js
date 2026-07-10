@@ -149,6 +149,42 @@ describe('modules/jira/services/hubspot', () => {
     });
   });
 
+  describe('attachNote', () => {
+    it('creates a note and associates it with the ticket, returning the note id', async () => {
+      fetchMock
+        .mockResolvedValueOnce(okJson({ id: 'note-1' }))
+        .mockResolvedValueOnce({ ok: true, status: 204, json: async () => { throw new Error('no body'); }, text: async () => '', headers: { get: () => null } });
+      const s = newHubspot();
+      const noteId = await s.attachNote('ticket-1', 'Empresa solicitante: Acme Corp');
+      expect(noteId).toBe('note-1');
+
+      const [noteUrl, noteOpts] = fetchMock.mock.calls[0];
+      expect(noteUrl).toBe('https://api.hubapi.com/crm/v3/objects/notes');
+      expect(noteOpts.method).toBe('POST');
+      const noteBody = JSON.parse(noteOpts.body);
+      expect(noteBody.properties.hs_note_body).toBe('Empresa solicitante: Acme Corp');
+      expect(typeof noteBody.properties.hs_timestamp).toBe('number');
+
+      const [assocUrl, assocOpts] = fetchMock.mock.calls[1];
+      expect(assocUrl).toBe('https://api.hubapi.com/crm/v4/objects/notes/note-1/associations/default/tickets/ticket-1');
+      expect(assocOpts.method).toBe('PUT');
+    });
+
+    it('throws when creating the note fails', async () => {
+      fetchMock.mockResolvedValueOnce(errJson(400, 'bad note'));
+      const s = newHubspot();
+      await expect(s.attachNote('ticket-1', 'x')).rejects.toThrow(/HubSpot 400/);
+    });
+
+    it('throws when the association fails', async () => {
+      fetchMock
+        .mockResolvedValueOnce(okJson({ id: 'note-1' }))
+        .mockResolvedValueOnce(errJson(500, 'assoc failed'));
+      const s = newHubspot();
+      await expect(s.attachNote('ticket-1', 'x')).rejects.toThrow(/HubSpot 500/);
+    });
+  });
+
   describe('getTicket', () => {
     it('GETs the ticket with requested properties and returns properties', async () => {
       fetchMock.mockResolvedValueOnce(okJson({ id: 'ticket-1', properties: { jira_issue_key: 'PROJ-1', jira_listo_sent: 'true' } }));

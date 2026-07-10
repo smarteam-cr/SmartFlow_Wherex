@@ -33,6 +33,7 @@ beforeEach(async () => {
 function fakeJira(issuesByJql = {}) {
   return {
     searchIssues: vi.fn(async ({ jql }) => issuesByJql[jql] || []),
+    getIssue: vi.fn(async (key) => ({ key, fields: {}, names: {} })),
   };
 }
 function fakeHubspot({ existingKeys = new Set(), created = [] } = {}) {
@@ -43,6 +44,7 @@ function fakeHubspot({ existingKeys = new Set(), created = [] } = {}) {
       created.push(issue.key);
       return { id };
     }),
+    attachNote: vi.fn(async () => {}),
   };
 }
 
@@ -131,6 +133,52 @@ describe('modules/jira/jobs/ingest', () => {
     await ingest.run({ now: NOW });
     expect(await store.isProcessed('PROJ', 'PROJ-1')).toBe(true);
     expect(await store.isProcessed('PROJ', 'PROJ-2')).toBe(true);
+  });
+
+  it('attaches a HubSpot note with the full Jira issue details after creating a ticket', async () => {
+    const jira = fakeJira({
+      'project = PROJ AND updated >= "-5m" ORDER BY updated ASC': [issue({ key: 'PROJ-1' })],
+    });
+    jira.getIssue = vi.fn(async (key) => ({
+      key,
+      fields: { summary: 's', customfield_10088: 'Acme Corp' },
+      names: { customfield_10088: 'Empresa solicitante' },
+    }));
+    const hubspot = fakeHubspot();
+    const ingest = createIngestJob({ jira, hubspot, store, projects: ['PROJ'], pollIntervalMin: 5 });
+    await ingest.run({ now: NOW });
+    expect(jira.getIssue).toHaveBeenCalledWith('PROJ-1');
+    expect(hubspot.attachNote).toHaveBeenCalledWith(
+      'ticket-PROJ-1',
+      expect.stringContaining('Empresa solicitante: Acme Corp')
+    );
+  });
+
+  it('skips attachNote when the issue has no displayable extra fields', async () => {
+    const jira = fakeJira({
+      'project = PROJ AND updated >= "-5m" ORDER BY updated ASC': [issue({ key: 'PROJ-1' })],
+    });
+    const hubspot = fakeHubspot();
+    const ingest = createIngestJob({ jira, hubspot, store, projects: ['PROJ'], pollIntervalMin: 5 });
+    await ingest.run({ now: NOW });
+    expect(hubspot.attachNote).not.toHaveBeenCalled();
+  });
+
+  it('does not fail ticket creation when attaching the note fails', async () => {
+    const jira = fakeJira({
+      'project = PROJ AND updated >= "-5m" ORDER BY updated ASC': [issue({ key: 'PROJ-1' })],
+    });
+    jira.getIssue = vi.fn(async (key) => ({
+      key,
+      fields: { customfield_1: 'value' },
+      names: {},
+    }));
+    const hubspot = fakeHubspot();
+    hubspot.attachNote = vi.fn().mockRejectedValue(new Error('HubSpot 500'));
+    const ingest = createIngestJob({ jira, hubspot, store, projects: ['PROJ'], pollIntervalMin: 5 });
+    const result = await ingest.run({ now: NOW });
+    expect(result.created).toBe(1);
+    expect(result.errors).toEqual([]);
   });
 
   it('advances the watermark to the max updated timestamp', async () => {
