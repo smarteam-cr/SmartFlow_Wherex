@@ -18,11 +18,17 @@ function installRawBodyParser(fastify) {
   );
 }
 
-function createApp({ mongo, integrations } = {}) {
+function createApp({ mongo, jira, slack } = {}) {
   if (!mongo) throw new Error('app: mongo is required');
   const app = Fastify({ trustProxy: true });
   installRawBodyParser(app);
   app.register(buildHealthPlugin(mongo));
+  if (jira && jira.webhooks) {
+    app.register(jira.webhooks, { prefix: '/jira' });
+  }
+  if (slack && slack.webhooks) {
+    app.register(slack.webhooks, { prefix: '/slack' });
+  }
   return app;
 }
 

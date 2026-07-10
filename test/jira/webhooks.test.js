@@ -314,6 +314,9 @@ describe('modules/jira/webhooks', () => {
     });
 
     it('plugin can be registered without the /jira prefix for backward compat', async () => {
+      hubspot.getTicket.mockResolvedValue({ jira_issue_key: 'PROJ-1', jira_listo_sent: 'false' });
+      jira.respondToIssue.mockResolvedValue('comment-99');
+      hubspot.updateTicket.mockResolvedValue({});
       const plugin = buildJiraWebhooksRouter({
         appSecret: APP_SECRET,
         closedStageId: CLOSED_STAGE_ID,
