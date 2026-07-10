@@ -3,7 +3,7 @@ import crypto from 'node:crypto';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const { isValidSignature } = require('../src/shared/hubspotSignature');
+const { isValidSignature } = require('../../src/shared/hubspotSignature');
 
 const APP_SECRET = 'test-app-secret';
 

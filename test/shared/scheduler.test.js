@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const { createScheduler } = require('../src/shared/scheduler');
+const { createScheduler } = require('../../src/shared/scheduler');
 
 let cron;
 let scheduleMock;
@@ -114,18 +114,24 @@ describe('shared/scheduler.createScheduler', () => {
     });
 
     it('resumes scheduling after a previous invocation finishes', async () => {
-      let resolveRun;
+      let pendingResolve;
       const ingest = {
-        run: vi.fn(() => new Promise((resolve) => { resolveRun = resolve; })),
+        run: vi.fn(() => new Promise((resolve) => { pendingResolve = resolve; })),
       };
       scheduler.registerJob({ name: 'x', ingest, intervalMin: 5 });
+
       const first = handles[0]._handler();
       await handles[0]._handler();
       expect(ingest.run).toHaveBeenCalledTimes(1);
-      resolveRun();
+
+      pendingResolve();
       await first;
-      await handles[0]._handler();
+
+      const second = handles[0]._handler();
       expect(ingest.run).toHaveBeenCalledTimes(2);
+
+      pendingResolve();
+      await second;
     });
   });
 

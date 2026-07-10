@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const withRetry = require('../src/shared/retry');
+const withRetry = require('../../src/shared/retry');
 
 function makeErr(status, body = '') {
   const err = new Error(`HTTP ${status}: ${body}`);
@@ -122,9 +122,9 @@ describe('shared/retry.withRetry', () => {
     expect(fn.mock.calls[1][0]).toBe(1);
   });
 
-  it('throws if retries is negative or non-integer', () => {
+  it('rejects if retries is negative or non-integer', async () => {
     const fn = vi.fn();
-    expect(() => withRetry(fn, { retries: -1, baseMs: 10 })).toThrow();
-    expect(() => withRetry(fn, { retries: 1.5, baseMs: 10 })).toThrow();
+    await expect(withRetry(fn, { retries: -1, baseMs: 10 })).rejects.toThrow(/retries/);
+    await expect(withRetry(fn, { retries: 1.5, baseMs: 10 })).rejects.toThrow(/retries/);
   });
 });
