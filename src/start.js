@@ -12,7 +12,7 @@ const { buildJiraWebhooksRouter } = require('./routes/jira/webhooks');
 
 const createSlackService = require('./modules/slack/services/slack').createSlackService;
 const createSlackHubSpotService = require('./modules/slack/services/hubspot');
-const createSlackIngestJob = require('./modules/slack/jobs/ingest');
+const { createIngestJob: createSlackIngestJob } = require('./modules/slack/jobs/ingest');
 const slackStore = require('./modules/slack/store');
 const { buildSlackWebhooksRouter } = require('./routes/slack/webhooks');
 
