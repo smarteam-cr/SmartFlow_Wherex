@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import crypto from 'node:crypto';
 import { createRequire } from 'node:module';
@@ -28,16 +28,16 @@ const SLACK_STAGE_COMPLETED_ID = '4';
 
 beforeAll(async () => {
   mongod = await MongoMemoryServer.create();
-  connection = require('../../src/db/connection');
+  connection = require('../src/db/connection');
   await connection.connect(mongod.getUri(), 'test_app_iso');
 
-  createJiraService = require('../../src/modules/jira/services/jira');
-  createHubSpotService = require('../../src/modules/jira/services/hubspot');
-  createSlackService = require('../../src/modules/slack/services/slack').createSlackService;
-  createSlackHubSpotService = require('../../src/modules/slack/services/hubspot');
-  buildJiraWebhooksRouter = require('../../src/routes/jira/webhooks').buildJiraWebhooksRouter;
-  buildSlackWebhooksRouter = require('../../src/routes/slack/webhooks').buildSlackWebhooksRouter;
-  ({ createApp } = require('../../src/app'));
+  createJiraService = require('../src/modules/jira/services/jira');
+  createHubSpotService = require('../src/modules/jira/services/hubspot');
+  createSlackService = require('../src/modules/slack/services/slack').createSlackService;
+  createSlackHubSpotService = require('../src/modules/slack/services/hubspot');
+  buildJiraWebhooksRouter = require('../src/routes/jira/webhooks').buildJiraWebhooksRouter;
+  buildSlackWebhooksRouter = require('../src/routes/slack/webhooks').buildSlackWebhooksRouter;
+  ({ createApp } = require('../src/app'));
 }, 30000);
 
 afterAll(async () => {
@@ -161,6 +161,7 @@ describe('app integration: cross-integration isolation', () => {
 
 describe('app integration: invalid Jira config does not break Slack', () => {
   let app;
+  let fetchMock;
 
   beforeAll(async () => {
     const slackHubspot = createSlackHubSpotService({
@@ -192,21 +193,43 @@ describe('app integration: invalid Jira config does not break Slack', () => {
 
   afterAll(async () => {
     if (app) await app.close();
+    if (fetchMock) vi.unstubAllGlobals();
   });
 
   it('still serves /slack/webhooks/hubspot (Jira is not registered)', async () => {
-    const body = JSON.stringify([{
-      objectId: 't1',
-      subscriptionType: 'ticket.propertyChange',
-      propertyName: 'hs_pipeline_stage',
-      propertyValue: SLACK_STAGE_COMPLETED_ID,
-    }]);
-    const res = await request(app.server)
-      .post('/slack/webhooks/hubspot')
-      .set('Content-Type', 'application/json')
-      .set('x-hubspot-signature', signV1(SLACK_SECRET, body))
-      .send(body);
-    expect(res.status).toBe(200);
+    fetchMock = vi.fn();
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        id: 't1',
+        properties: { slack_channel_id: 'C0TEST', slack_thread_ts: '1.1', slack_listo_sent: 'false' },
+      }),
+      text: async () => '{}',
+    });
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => ({}),
+      text: async () => '{}',
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      const body = JSON.stringify([{
+        objectId: 't1',
+        subscriptionType: 'ticket.propertyChange',
+        propertyName: 'hs_pipeline_stage',
+        propertyValue: SLACK_STAGE_COMPLETED_ID,
+      }]);
+      const res = await request(app.server)
+        .post('/slack/webhooks/hubspot')
+        .set('Content-Type', 'application/json')
+        .set('x-hubspot-signature', signV1(SLACK_SECRET, body))
+        .send(body);
+      expect(res.status).toBe(200);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('returns 404 on /jira/webhooks/hubspot because Jira was never wired', async () => {

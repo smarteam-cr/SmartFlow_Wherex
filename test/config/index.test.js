@@ -59,7 +59,7 @@ describe('config/index.loadConfig (aggregator)', () => {
   it('returns shared+jira+slack shape with both ok=true when all env present', () => {
     setEnv({ MONGO_URI: 'mongodb://localhost:27017/test', ...JIRA_OK, ...SLACK_OK });
     const result = loadConfig(process.env);
-    expect(result.shared.MONGO_URI).toBe('mongodb://localhost:27017/test');
+    expect(result.shared.values.MONGO_URI).toBe('mongodb://localhost:27017/test');
     expect(result.jira.ok).toBe(true);
     expect(result.slack.ok).toBe(true);
   });
