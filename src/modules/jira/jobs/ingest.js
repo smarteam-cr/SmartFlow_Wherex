@@ -78,6 +78,10 @@ function createIngestJob({
         }
 
         try {
+          if (await store.isProcessed(project, iss.key)) {
+            result.skipped += 1;
+            continue;
+          }
           const existing = await hubspot.findTicketByJiraKey(iss.key);
           if (existing) {
             result.skipped += 1;

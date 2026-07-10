@@ -108,7 +108,23 @@ function createJiraService({ baseUrl, email, apiToken, withRetry } = {}) {
       `Resuelto via HubSpot el ${new Date().toISOString()}.`
     );
     if (transitionDoneId) {
-      await transitionIssue(issueKey, transitionDoneId);
+      try {
+        await transitionIssue(issueKey, transitionDoneId);
+      } catch (err) {
+        // A 4xx here means the transition isn't valid from the issue's
+        // current workflow status (e.g. it never advanced past its initial
+        // status in JIRA) — retrying won't fix that, so we log and move on
+        // instead of leaving the ticket stuck retrying (and re-commenting)
+        // forever. Non-4xx errors (JIRA down, etc.) still propagate so the
+        // caller can retry.
+        if (err && err.status >= 400 && err.status < 500) {
+          console.warn(
+            `issue ${issueKey}: no se pudo transicionar con transitionId ${transitionDoneId} (¿no disponible desde el estado actual?): ${err.message}`
+          );
+        } else {
+          throw err;
+        }
+      }
     }
     return created.id;
   }

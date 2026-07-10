@@ -135,6 +135,25 @@ describe('modules/jira/jobs/ingest', () => {
     expect(await store.isProcessed('PROJ', 'PROJ-2')).toBe(true);
   });
 
+  it('does not create a duplicate ticket when the same issue reappears in a later poll before HubSpot search catches up', async () => {
+    // hubspot.findTicketByJiraKey's search index can lag behind a just-created
+    // ticket, so it alone is not a safe dedup check across separate poll runs.
+    const jira = {
+      searchIssues: vi.fn(async () => [issue({ key: 'PROJ-1' })]),
+      getIssue: vi.fn(async (key) => ({ key, fields: {}, names: {} })),
+    };
+    const hubspot = fakeHubspot(); // findTicketByJiraKey always returns null
+    const ingest = createIngestJob({ jira, hubspot, store, projects: ['PROJ'], pollIntervalMin: 5 });
+
+    const firstResult = await ingest.run({ now: NOW });
+    const secondResult = await ingest.run({ now: new Date(NOW.getTime() + 5 * 60 * 1000) });
+
+    expect(hubspot.createTicket).toHaveBeenCalledTimes(1);
+    expect(firstResult.created).toBe(1);
+    expect(secondResult.created).toBe(0);
+    expect(secondResult.skipped).toBe(1);
+  });
+
   it('attaches a HubSpot note with the full Jira issue details after creating a ticket', async () => {
     const jira = fakeJira({
       'project = PROJ AND updated >= "-5m" ORDER BY updated ASC': [issue({ key: 'PROJ-1' })],

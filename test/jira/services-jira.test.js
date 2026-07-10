@@ -196,6 +196,26 @@ describe('modules/jira/services/jira', () => {
       expect(commentId).toBe('comment-99');
       expect(fetchMock).toHaveBeenCalledTimes(1);
     });
+
+    it('logs a warning and does not throw when the transition is invalid for the issue\'s current status (4xx)', async () => {
+      fetchMock
+        .mockResolvedValueOnce(okJson({ id: 'comment-99' }))
+        .mockResolvedValueOnce(errJson(400, 'transition not available in current status'));
+      const s = newJira();
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const commentId = await s.respondToIssue('PROJ-1', { transitionDoneId: '121' });
+      expect(commentId).toBe('comment-99');
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('PROJ-1'));
+      warnSpy.mockRestore();
+    });
+
+    it('still throws when the transition fails with a non-4xx error (e.g. JIRA down), so the caller can retry', async () => {
+      fetchMock
+        .mockResolvedValueOnce(okJson({ id: 'comment-99' }))
+        .mockResolvedValueOnce(errJson(503, 'down'));
+      const s = newJira();
+      await expect(s.respondToIssue('PROJ-1', { transitionDoneId: '121' })).rejects.toThrow(/503/);
+    });
   });
 
   describe('retry integration', () => {
