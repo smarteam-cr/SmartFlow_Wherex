@@ -4,16 +4,15 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 
 let hubspot;
+let createHubSpotService;
 let fetchMock;
 
 beforeEach(() => {
   fetchMock = vi.fn();
   vi.stubGlobal('fetch', fetchMock);
   delete require.cache[require.resolve('../../src/modules/slack/services/hubspot')];
-  ({ createHubSpotService } = require('../../src/modules/slack/services/hubspot').createHubSpotService
-    ? require('../../src/modules/slack/services/hubspot')
-    : { createHubSpotService: require('../../src/modules/slack/services/hubspot') });
   hubspot = require('../../src/modules/slack/services/hubspot');
+  createHubSpotService = hubspot.createHubSpotService;
 });
 
 const TOKEN = 'pat-na1-test';

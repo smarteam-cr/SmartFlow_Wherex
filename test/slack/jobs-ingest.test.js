@@ -17,6 +17,7 @@ beforeAll(async () => {
     { channel: 1, ts: 1 },
     { unique: true }
   );
+  store = require('../../src/modules/slack/store');
   delete require.cache[require.resolve('../../src/modules/slack/jobs/ingest')];
   ({ createIngestJob } = require('../../src/modules/slack/jobs/ingest'));
 });
