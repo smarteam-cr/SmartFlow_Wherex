@@ -34,6 +34,7 @@ async function buildJiraIntegration(cfg) {
     store: jiraStore,
     projects: cfg.JIRA_PROJECT_KEYS,
     pollIntervalMin: cfg.POLL_INTERVAL_MIN,
+    assistanceTypeFieldIds: cfg.JIRA_ASSISTANCE_TYPE_FIELD_IDS,
   });
   const webhooks = buildJiraWebhooksRouter({
     appSecret: cfg.JIRA_HUBSPOT_APP_SECRET,

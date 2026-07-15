@@ -1,4 +1,5 @@
 const buildIssueNote = require('../utils/issueNote');
+const { isCustomerCareAssistance } = require('../utils/assistanceType');
 
 function toIsoNormalized(isoOrDate) {
   if (!isoOrDate) return null;
@@ -19,6 +20,7 @@ function createIngestJob({
   pollIntervalMin,
   skipSubtasks = false,
   excludeStatuses = [],
+  assistanceTypeFieldIds = [],
 } = {}) {
   if (!jira) throw new Error('createIngestJob: jira is required');
   if (!hubspot) throw new Error('createIngestJob: hubspot is required');
@@ -54,7 +56,10 @@ function createIngestJob({
       const jql = jqlForProject(project, minutesAgo);
       let issues;
       try {
-        issues = await jira.searchIssues({ jql, fields: ['summary', 'description', 'reporter', 'assignee', 'updated', 'status', 'project', 'issuetype'] });
+        issues = await jira.searchIssues({
+          jql,
+          fields: ['summary', 'description', 'reporter', 'assignee', 'updated', 'status', 'project', 'issuetype', ...assistanceTypeFieldIds],
+        });
         anySucceeded = true;
       } catch (err) {
         result.errors.push({ project, error: err.message });
@@ -73,6 +78,14 @@ function createIngestJob({
         }
 
         if (iss?.fields?.status?.name && excludeSet.has(iss.fields.status.name)) {
+          result.skipped += 1;
+          continue;
+        }
+
+        if (
+          assistanceTypeFieldIds.length > 0 &&
+          !isCustomerCareAssistance(iss?.fields, assistanceTypeFieldIds)
+        ) {
           result.skipped += 1;
           continue;
         }

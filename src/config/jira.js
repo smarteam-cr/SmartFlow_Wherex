@@ -44,6 +44,12 @@ function loadJiraConfig(env = process.env, { sharedPollIntervalMin } = {}) {
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean);
+  const assistanceTypeFieldIds = env.JIRA_ASSISTANCE_TYPE_FIELD_IDS
+    ? String(env.JIRA_ASSISTANCE_TYPE_FIELD_IDS)
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+    : [];
 
   return {
     ok: true,
@@ -53,6 +59,7 @@ function loadJiraConfig(env = process.env, { sharedPollIntervalMin } = {}) {
       JIRA_EMAIL: email,
       JIRA_API_TOKEN: apiToken,
       JIRA_PROJECT_KEYS: projectKeys,
+      JIRA_ASSISTANCE_TYPE_FIELD_IDS: assistanceTypeFieldIds,
       JIRA_TRANSITION_DONE_ID: env.JIRA_TRANSITION_DONE_ID
         ? String(env.JIRA_TRANSITION_DONE_ID)
         : undefined,

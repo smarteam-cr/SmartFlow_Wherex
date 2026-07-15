@@ -48,7 +48,7 @@ function fakeHubspot({ existingKeys = new Set(), created = [] } = {}) {
   };
 }
 
-function issue({ key, project = 'PROJ', updated = '2026-07-08T10:00:00.000+0000', summary = 's', issuetype, status, subtaskType = false }) {
+function issue({ key, project = 'PROJ', updated = '2026-07-08T10:00:00.000+0000', summary = 's', issuetype, status, subtaskType = false, extraFields = {} }) {
   return {
     key,
     fields: {
@@ -57,6 +57,7 @@ function issue({ key, project = 'PROJ', updated = '2026-07-08T10:00:00.000+0000'
       updated,
       issuetype: issuetype || { name: subtaskType ? 'Sub-task' : 'Task' },
       status: status || { name: 'To Do' },
+      ...extraFields,
     },
   };
 }
@@ -304,6 +305,46 @@ describe('modules/jira/jobs/ingest', () => {
     const result = await ingest.run({ now: NOW });
     expect(result.created).toBe(1);
     expect(result.skipped).toBe(2);
+  });
+
+  it('only syncs issues whose Tipo de Asistencia field starts with "CC" when assistanceTypeFieldIds is set', async () => {
+    const fieldIds = ['customfield_10822', 'customfield_10823'];
+    const jira = fakeJira({
+      'project = PROJ AND updated >= "-5m" ORDER BY updated ASC': [
+        issue({ key: 'PROJ-1', extraFields: { customfield_10822: { value: 'CC - Registro y accesos' } } }),
+        issue({ key: 'PROJ-2', extraFields: { customfield_10823: { value: 'ING - Soporte técnico' } } }),
+        issue({ key: 'PROJ-3' }), // sin ninguno de los campos poblado
+      ],
+    });
+    const hubspot = fakeHubspot();
+    const ingest = createIngestJob({
+      jira,
+      hubspot,
+      store,
+      projects: ['PROJ'],
+      pollIntervalMin: 5,
+      assistanceTypeFieldIds: fieldIds,
+    });
+    const result = await ingest.run({ now: NOW });
+    expect(result.created).toBe(1);
+    expect(result.skipped).toBe(2);
+    expect(hubspot.createTicket).toHaveBeenCalledTimes(1);
+    expect(hubspot.createTicket.mock.calls[0][0].key).toBe('PROJ-1');
+  });
+
+  it('syncs everything by default when assistanceTypeFieldIds is not set', async () => {
+    const jira = fakeJira({
+      'project = PROJ AND updated >= "-5m" ORDER BY updated ASC': [
+        issue({ key: 'PROJ-1', extraFields: { customfield_10822: { value: 'CC - Registro y accesos' } } }),
+        issue({ key: 'PROJ-2', extraFields: { customfield_10823: { value: 'ING - Soporte técnico' } } }),
+        issue({ key: 'PROJ-3' }),
+      ],
+    });
+    const hubspot = fakeHubspot();
+    const ingest = createIngestJob({ jira, hubspot, store, projects: ['PROJ'], pollIntervalMin: 5 });
+    const result = await ingest.run({ now: NOW });
+    expect(result.created).toBe(3);
+    expect(result.skipped).toBe(0);
   });
 
   it('returns shape { created, skipped, errors, watermark }', async () => {
