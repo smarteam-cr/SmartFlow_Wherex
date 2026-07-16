@@ -86,3 +86,11 @@ En `buildJiraIntegration` (línea 31-37), pasar `assistanceTypeFieldIds: cfg.JIR
 
 1. `npm test` (vitest) — deben pasar los tests existentes de `test/jira/*.test.js` sin cambios de comportamiento cuando `assistanceTypeFieldIds` no está seteado, más los nuevos casos.
 2. No se hace una corrida en vivo contra Jira/HubSpot como parte de la verificación (crearía/modificaría datos reales); la validación es vía el suite de tests, que ya sigue el patrón de mocks de `fakeJira`/`fakeHubspot` usado en todo `jobs-ingest.test.js`.
+
+## Corrección post-deploy (2026-07-16): filtro "fail-open" por diseño original
+
+El diseño original dejaba `JIRA_ASSISTANCE_TYPE_FIELD_IDS` como único interruptor del filtro, sin default en código (`: []` si la env var no estaba seteada). El mismo día del deploy entró a HubSpot el ticket `P30-12184` ("Proveedor no puede configurar zonas", `Tipo de Asistencia / Sourcing = "ING - Consulta"`), que debía haberse filtrado.
+
+Causa raíz: `git pull` trajo el código nuevo al servidor, pero `.env` está en `.gitignore` — nadie agregó `JIRA_ASSISTANCE_TYPE_FIELD_IDS` al `.env` real del contenedor desplegado, así que `assistanceTypeFieldIds` quedó en `[]` y la condición `assistanceTypeFieldIds.length > 0` nunca se cumplió: el filtro quedó desactivado en silencio y todo siguió sincronizando, tal como antes del cambio.
+
+Corrección aplicada en `src/config/jira.js`: los 4 field IDs (`customfield_10822/10823/10824/10825`) ahora son un **default hardcodeado en el código** (`DEFAULT_ASSISTANCE_TYPE_FIELD_IDS`), no solo un valor de ejemplo en `.env.example`. `JIRA_ASSISTANCE_TYPE_FIELD_IDS` pasa a ser un override opcional (para agregar/reemplazar IDs sin tocar código), no el interruptor del filtro. Así, un deploy que solo trae el código (sin tocar `.env`) deja el filtro activo igual — falla hacia el lado seguro en vez de hacia el permisivo.

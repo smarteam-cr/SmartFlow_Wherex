@@ -1,3 +1,14 @@
+// Default: IDs de custom field donde Jira Forms sincroniza "Tipo de Asistencia" (uno por
+// linea de producto). Hardcodeados aca (y no solo en .env) para que el filtro CC quede
+// activo por defecto — un deploy que trae el codigo nuevo pero no actualiza el .env del
+// servidor (.env esta en .gitignore, git pull no lo toca) no debe dejar el filtro apagado.
+const DEFAULT_ASSISTANCE_TYPE_FIELD_IDS = [
+  'customfield_10822', // Tipo de Asistencia / Sourcing
+  'customfield_10823', // Tipo de Asistencia / DataOps
+  'customfield_10824', // Tipo de Asistencia / FyC
+  'customfield_10825', // Tipo de Asistencia / Pay
+];
+
 function loadJiraConfig(env = process.env, { sharedPollIntervalMin } = {}) {
   const errors = [];
 
@@ -49,7 +60,7 @@ function loadJiraConfig(env = process.env, { sharedPollIntervalMin } = {}) {
         .split(',')
         .map((s) => s.trim())
         .filter(Boolean)
-    : [];
+    : DEFAULT_ASSISTANCE_TYPE_FIELD_IDS;
 
   return {
     ok: true,

@@ -57,7 +57,8 @@ Scripts de diagnóstico (usan las credenciales reales de `.env`, son de solo lec
   - `store.js` — persistencia Mongo (watermark + dedup), acceso directo vía driver `mongodb`, sin ORM.
   - `utils/` — funciones puras (parsing, formateo), sin dependencias externas.
 - `config/<integracion>.js` expone `loadXConfig(env)` → `{ ok, errors, values }`, **nunca lanza excepción** (config inválida = integración deshabilitada, no crash). `config/index.js` compone todas.
-- Filtros/params opcionales en los jobs de ingesta siguen el patrón "default no-op": si no se configura explícitamente (env var vacía → array/false por defecto), el comportamiento no cambia. Ver `skipSubtasks`, `excludeStatuses`, `assistanceTypeFieldIds` en `modules/jira/jobs/ingest.js`.
+- Filtros/params opcionales en los jobs de ingesta siguen el patrón "default no-op": si no se configura explícitamente (env var vacía → array/false por defecto), el comportamiento no cambia. Ver `skipSubtasks`, `excludeStatuses` en `modules/jira/jobs/ingest.js`.
+- **Excepción importante:** si un filtro implementa una regla de negocio obligatoria (no un afinamiento opcional), su default debe ser el lado seguro, hardcodeado en el código — no depender de que una env var esté seteada en el `.env` del servidor. `.env` está en `.gitignore`, así que `git pull` nunca lo actualiza; un deploy puede traer el código nuevo y dejar el filtro apagado en silencio si el interruptor vive solo ahí. Ver `DEFAULT_ASSISTANCE_TYPE_FIELD_IDS` en `config/jira.js` (incidente real: `docs/2026-07-15_plan-filtro-tipo-asistencia-cc.md`, sección "Corrección post-deploy").
 - Tests con Vitest, archivos en **ESM** (`import`) que cargan el código fuente CJS vía `createRequire(import.meta.url)`. Mocks manuales (`vi.fn()`) para servicios externos (Jira/HubSpot); `mongodb-memory-server` para tests que tocan el store real (nada de mocks de Mongo). Convención de nombres: `test/<integracion>/<tipo>-<nombre>.test.js` (`jobs-ingest.test.js`, `services-jira.test.js`, `utils-issueNote.test.js`).
 - Antes de dar por terminado un cambio: `npm test` debe pasar completo, y si el cambio toca un flujo con efectos reales (crea/edita algo en Jira o HubSpot), preferir un dry-run con los clientes externos "fakeados" en memoria antes de correrlo contra los sistemas reales.
 
@@ -83,7 +84,7 @@ No hay ORM ni migraciones — los índices se crean en runtime vía `ensureIndex
 
 - Arquitectura actual: **monolito unificado** (desde commit `3ddbe2c`), reemplaza dos servicios standalone que existían antes.
 - `smartflow-hubspot-jira/` y `smartflow-hubspot-slack/` en la raíz del repo son el **código legacy pre-monolito** — se mantienen temporalmente como referencia/rollback, no son el código vivo, y están pendientes de eliminar en un commit aparte una vez confirmado el corte en producción (ver `docs/2026-07-09_plan-restructuracion-monolito.md`).
-- Filtro Jira→HubSpot por "Tipo de Asistencia" (solo sincroniza issues clasificados como `CC`, ver `docs/2026-07-15_plan-filtro-tipo-asistencia-cc.md`) implementado y verificado con dry-run contra Jira real; **pendiente de commit y de deploy** al servidor en vivo.
+- Filtro Jira→HubSpot por "Tipo de Asistencia" (solo sincroniza issues clasificados como `CC`, ver `docs/2026-07-15_plan-filtro-tipo-asistencia-cc.md`) commiteado y desplegado el 2026-07-16. Ese mismo día se detectó que el diseño original era "fail-open" (filtro apagado si `.env` del servidor no tenía la env var) y dejó pasar un ticket `ING`; corregido con default hardcodeado en `config/jira.js` — **esta corrección está pendiente de commit y deploy**.
 - Hay un despliegue en vivo separado de este working directory — ver nota de Despliegue arriba.
 
 ## Mapas de código y referencias

@@ -113,4 +113,23 @@ describe('config/jira.loadJiraConfig', () => {
     setEnv({ JIRA_HUBSPOT_TOKEN: undefined });
     expect(() => loadJiraConfig(process.env)).not.toThrow();
   });
+
+  it('defaults to the known Tipo de Asistencia field IDs when JIRA_ASSISTANCE_TYPE_FIELD_IDS is not set (fail-safe: filter stays active even if a deploy forgets to set it)', () => {
+    clearEnv();
+    setEnv();
+    const result = loadJiraConfig(process.env);
+    expect(result.values.JIRA_ASSISTANCE_TYPE_FIELD_IDS).toEqual([
+      'customfield_10822',
+      'customfield_10823',
+      'customfield_10824',
+      'customfield_10825',
+    ]);
+  });
+
+  it('overrides the default field IDs when JIRA_ASSISTANCE_TYPE_FIELD_IDS is explicitly set', () => {
+    clearEnv();
+    setEnv({ JIRA_ASSISTANCE_TYPE_FIELD_IDS: 'customfield_1, customfield_2' });
+    const result = loadJiraConfig(process.env);
+    expect(result.values.JIRA_ASSISTANCE_TYPE_FIELD_IDS).toEqual(['customfield_1', 'customfield_2']);
+  });
 });
